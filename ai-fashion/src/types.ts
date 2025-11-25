@@ -27,3 +27,4 @@ export interface FavoriteCreation {
     type: 'ai-studio' | 'designer';
   };
 }
+

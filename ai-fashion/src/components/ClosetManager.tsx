@@ -163,7 +163,6 @@ export const ClosetManager: React.FC<ClosetManagerProps> = ({ closet, setCloset,
         };
     }, [closet]);
 
-    // FIX: Reset carousel indices when the underlying closet data changes to prevent out-of-bounds access errors that can cause the app to crash.
     useEffect(() => { setTopIndex(0); }, [tops]);
     useEffect(() => { setBottomIndex(0); }, [bottoms]);
     useEffect(() => { setDressIndex(0); }, [dresses]);

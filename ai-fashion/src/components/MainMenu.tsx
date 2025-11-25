@@ -48,10 +48,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onNavigate, modelImage }) =>
                     </div>
                 </MenuButton>
             </div>
-            <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto">
+            <div className="grid grid-cols-4 gap-4 max-w-2xl mx-auto">
                 <MenuButton onClick={() => onNavigate('wardrobe')} color="bg-purple-300">My Wardrobe</MenuButton>
                 <MenuButton onClick={() => onNavigate('closetManager')} color="bg-blue-300">Manage Closet</MenuButton>
                 <MenuButton onClick={() => onNavigate('aiStudio')} color="bg-green-300">Try New Outfits</MenuButton>
+                <MenuButton onClick={() => onNavigate('myCreations')} color="bg-yellow-300">Past Looks</MenuButton>
             </div>
         </div>
     );

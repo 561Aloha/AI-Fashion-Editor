@@ -20,18 +20,37 @@ export const ClothingCarousel: React.FC<ClothingCarouselProps> = ({ items, curre
     const currentImageSrc = () => {
         if (!currentItem) return '';
         const src = currentItem.source;
+        
+        // Already a data URL
         if (src.startsWith('data:image')) return src;
-        if (src.length > 500) { // Heuristic to guess if it's a b64 string vs a URL
-             return `data:image/png;base64,${src}`;
+        
+        // It's a base64 string (long string without slashes at start)
+        if (src.length > 500 && !src.startsWith('/') && !src.startsWith('http')) {
+            return `data:image/png;base64,${src}`;
         }
+        
+        // It's a local URL like "/blackskirt.jpeg" - use directly
+        if (src.startsWith('/')) {
+            return src;
+        }
+        
+        // External URL
         return src;
-    }
+    };
 
     return (
         <div className="flex flex-col items-center gap-2">
             <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center relative group">
                 {items.length > 0 && currentItem ? (
-                    <img src={currentImageSrc()} alt={`${title} item ${validIndex + 1}`} className="w-full h-full object-cover" />
+                    <img 
+                        src={currentImageSrc()} 
+                        alt={`${title} item ${validIndex + 1}`} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                            console.error(`Failed to load image: ${currentItem.source}`);
+                            (e.target as HTMLImageElement).src = '/placeholder.png'; // fallback
+                        }}
+                    />
                 ) : (
                     <span className="text-gray-500 text-center">No {title} items found for this category.</span>
                 )}
