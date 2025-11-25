@@ -1,6 +1,6 @@
 import type { Base64Image } from '../types';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY|| '';
+const API_KEY = (import.meta as any).env.VITE_GEMINI_API_KEY || '';
 
 export const generateFashionImage = async (
   modelImageB64: string,
@@ -25,7 +25,7 @@ export const generateFashionImage = async (
     ];
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`,
       {
         method: 'POST',
         headers: {
@@ -68,7 +68,7 @@ export const generateFashionImage = async (
 export const removeImageBackground = async (imageBase64: string): Promise<string> => {
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${API_KEY}`,
       {
         method: 'POST',
         headers: {
