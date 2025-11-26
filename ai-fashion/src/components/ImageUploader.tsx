@@ -11,19 +11,15 @@ interface ImageUploaderProps {
 }
 
 export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesUpload, images, label, multiple = false, helpText }) => {
-const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-  if (event.target.files) {
-    const filesArray = await Promise.all(
-      Array.from(event.target.files).map(async (file: File) => {
-        // Compress to ~100KB or less
-        return {
-          preview: URL.createObjectURL(file)
-        };
-      })
-    );
-    onImagesUpload(filesArray);
-  }
-};
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const filesArray = Array.from(event.target.files).map((file: File) => ({
+        file: file,  // ← Make sure this is a File, not a Blob
+        preview: URL.createObjectURL(file)
+      }));
+      onImagesUpload(filesArray);
+    }
+  };
 
   const removeImage = (indexToRemove: number) => {
     const newImages = images.filter((_, index) => index !== indexToRemove);

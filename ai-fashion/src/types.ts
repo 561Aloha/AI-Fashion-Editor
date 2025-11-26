@@ -28,3 +28,18 @@ export interface FavoriteCreation {
   };
 }
 
+
+// ---- Vite env typings ----
+declare global {
+  interface ImportMetaEnv {
+    readonly VITE_HF_API_KEY: string;
+    // add other VITE_ vars here if you make more
+  }
+
+  interface ImportMeta {
+    readonly env: ImportMetaEnv;
+  }
+}
+
+// Make this file a module so the global declarations work
+export {};

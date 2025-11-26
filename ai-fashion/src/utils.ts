@@ -1,4 +1,3 @@
-
 import type { Base64Image } from './types';
 
 // Helper to resize image to reduce token usage for API
@@ -42,25 +41,66 @@ const resizeImage = (blob: Blob, maxWidth: number, maxHeight: number): Promise<s
     });
 };
 
-export const fileToBase64Image = async (file: File): Promise<Base64Image> => {
+/**
+ * Convert File, Blob, or base64 string to Base64Image
+ * Handles all input types safely
+ */
+export const fileToBase64Image = async (input: File | Blob | string): Promise<Base64Image> => {
     try {
-        // Resize to max 1024x1024. This prevents hitting the input_token_count limit on the free tier.
-        const resizedDataUrl = await resizeImage(file, 1024, 1024);
-        const base64 = resizedDataUrl.split(',')[1];
-        // Always return as jpeg after resize for consistency and size
-        return { base64, mimeType: 'image/jpeg' };
-    } catch (e) {
-        console.warn("Image resize failed, falling back to original", e);
-         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = () => {
-                const result = reader.result as string;
-                const base64 = result.split(',')[1];
-                resolve({ base64, mimeType: file.type });
+        // If it's already a base64 string, return it
+        if (typeof input === 'string') {
+            console.log('[fileToBase64Image] Input is already a string');
+            return {
+                base64: input,
+                mimeType: 'image/jpeg',
             };
-            reader.onerror = (error) => reject(error);
-        });
+        }
+
+        // If it's a File or Blob, resize and convert
+        if (input instanceof File || input instanceof Blob) {
+            console.log('[fileToBase64Image] Input is a File/Blob, resizing...');
+            
+            try {
+                // Resize to max 1024x1024. This prevents hitting the input_token_count limit on the free tier.
+                const resizedDataUrl = await resizeImage(input, 1024, 1024);
+                const base64 = resizedDataUrl.split(',')[1];
+                
+                console.log('[fileToBase64Image] Resize successful, base64 length:', base64.length);
+                
+                // Always return as jpeg after resize for consistency and size
+                return { 
+                    base64, 
+                    mimeType: 'image/jpeg' 
+                };
+            } catch (resizeError) {
+                console.warn("[fileToBase64Image] Resize failed, falling back to original", resizeError);
+                
+                // Fallback: convert without resizing
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.readAsDataURL(input);
+                    reader.onload = () => {
+                        const result = reader.result as string;
+                        const base64 = result.split(',')[1];
+                        resolve({ 
+                            base64, 
+                            mimeType: input instanceof File ? input.type : 'image/jpeg' 
+                        });
+                    };
+                    reader.onerror = (error) => {
+                        console.error('[fileToBase64Image] FileReader error:', error);
+                        reject(error);
+                    };
+                });
+            }
+        }
+
+        // If we get here, input was invalid
+        throw new Error(`Input must be File, Blob, or base64 string, got: ${typeof input}`);
+
+    } catch (e: any) {
+        console.error("[fileToBase64Image] Error:", e.message);
+        throw e;
     }
 };
 

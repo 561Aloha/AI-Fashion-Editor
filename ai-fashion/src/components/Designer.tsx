@@ -4,7 +4,7 @@ import { clothingData } from '../data/clothing';
 import { ClothingCarousel } from './ClothingCarousel';
 import type { View, ViewMode } from './MainMenu';
 import { ImageUploader } from './ImageUploader';
-import { generateFashionImage } from './geminiService';
+import { generateVirtualTryOnHybrid } from './huggingfaceVirtualTryOn';
 import { fileToBase64Image, urlToBase64Image } from '../utils';
 
 // ============ IMAGE COMPRESSION FUNCTION ============
@@ -17,7 +17,6 @@ const compressBase64Image = async (base64: string, maxWidth = 600, maxHeight = 8
             let width = img.width;
             let height = img.height;
 
-            // Scale down if too large
             if (width > height) {
                 if (width > maxWidth) {
                     height *= maxWidth / width;
@@ -41,7 +40,7 @@ const compressBase64Image = async (base64: string, maxWidth = 600, maxHeight = 8
                         const reader = new FileReader();
                         reader.onloadend = () => {
                             const compressed = reader.result as string;
-                            resolve(compressed.split(',')[1]); // Return just base64
+                            resolve(compressed.split(',')[1]);
                         };
                         reader.readAsDataURL(blob);
                     }
@@ -71,7 +70,7 @@ const ActionButton: React.FC<{
 const getImageSrc = (source: string) => {
     if (!source) return '';
     if (source.startsWith('data:image')) return source;
-    if (source.length > 500) { // Heuristic for b64
+    if (source.length > 500) {
         return `data:image/png;base64,${source}`;
     }
     return source;
@@ -189,23 +188,27 @@ export const Designer: React.FC<{
             return;
         }
 
-        const itemsToProcess: string[] = [];
+        let descriptionParts: string[] = [];
         
         if (tryOnOutfitType === 'dress') {
-            if (dresses.length > 0) itemsToProcess.push(dresses[dressIndex].source);
-            if (shoes.length > 0) itemsToProcess.push(shoes[shoesIndex].source);
+            if (dresses.length > 0) descriptionParts.push('a dress');
+            if (shoes.length > 0) descriptionParts.push('shoes');
         } else if (tryOnOutfitType === 'top-bottom') {
-            if (tops.length > 0) itemsToProcess.push(tops[topIndex].source);
-            if (bottoms.length > 0) itemsToProcess.push(bottoms[bottomIndex].source);
+            if (tops.length > 0) descriptionParts.push('a top');
+            if (bottoms.length > 0) descriptionParts.push('bottoms');
         }
         
-        if (itemsToProcess.length === 0) {
+        if (descriptionParts.length === 0) {
             setError("No clothing items to generate.");
             return;
         }
 
-        const effectivePrompt = prompt.trim() || "Photoshop the selected clothing onto the model realistically.";
-        console.log('[DEBUG: Designer] Generation parameters:', { tryOnOutfitType, itemsToProcess, prompt: effectivePrompt });
+        const clothingDescription = descriptionParts.join(' and ');
+        const effectivePrompt = prompt.trim() 
+            ? `Person wearing ${clothingDescription}. ${prompt}`
+            : `Person wearing ${clothingDescription}. Professional fashion photography.`;
+        
+        console.log('[DEBUG: Designer] Generation parameters:', { tryOnOutfitType, prompt: effectivePrompt });
 
         setIsLoading(true);
         setError(null);
@@ -213,36 +216,28 @@ export const Designer: React.FC<{
 
         try {
             console.log('🎨 DESIGNER: Converting model image to base64...');
-            let modelB64 = await fileToBase64Image(modelImage[0].file);
             
-            // ✅ COMPRESS MODEL IMAGE
-            console.log('🎨 DESIGNER: Compressing model image...');
-            modelB64.base64 = await compressBase64Image(modelB64.base64, 600, 800, 0.55);
-            console.log('🎨 DESIGNER: Model image compressed');
+            const fileInput = modelImage[0]?.file;
+            console.log('🎨 DESIGNER: fileInput type:', typeof fileInput);
+            console.log('🎨 DESIGNER: fileInput instanceof File:', fileInput instanceof File);
+            console.log('🎨 DESIGNER: fileInput instanceof Blob:', fileInput instanceof Blob);
 
-            const clothingB64s: Base64Image[] = await Promise.all(
-                itemsToProcess.map(async (source) => {
-                    let base64 = '';
-                    if (source.startsWith('data:image')) {
-                        base64 = source.split(',')[1];
-                    } else if (source.length > 500) { 
-                        base64 = source;
-                    } else {
-                        const result = await urlToBase64Image(source);
-                        base64 = result.base64;
-                    }
-                    
-                    // ✅ COMPRESS EACH CLOTHING ITEM
-                    console.log('🎨 DESIGNER: Compressing clothing item...');
-                    const compressed = await compressBase64Image(base64, 400, 600, 0.55);
-                    console.log('🎨 DESIGNER: Clothing item compressed');
-                    
-                    return { base64: compressed, mimeType: 'image/jpeg' };
-                })
+            if (!fileInput) {
+                throw new Error('No file in modelImage');
+            }
+
+            // fileToBase64Image now handles File, Blob, or string
+            let modelB64 = await fileToBase64Image(fileInput);
+            console.log('🎨 DESIGNER: Model image converted');
+            console.log('🎨 DESIGNER: Base64 length:', modelB64.base64.length);
+
+            console.log('🎨 DESIGNER: Calling Hugging Face Virtual Try-On...');
+            const resultB64 = await generateVirtualTryOnHybrid(
+                modelB64.base64,
+                [],
+                effectivePrompt
             );
-
-            console.log('🎨 DESIGNER: All images compressed, calling Gemini API...');
-            const resultB64 = await generateFashionImage(modelB64.base64, clothingB64s, effectivePrompt);
+            
             const imageSrc = `data:image/png;base64,${resultB64}`;
             setGeneratedImage(imageSrc);
             console.log('🎨 DESIGNER: Image generation successful!');
@@ -281,22 +276,23 @@ export const Designer: React.FC<{
         if (isLoading) {
             return (
                 <div className="w-full aspect-[3/4] border-2 border-black rounded-lg bg-gray-200 flex flex-col items-center justify-center text-center p-4">
-                        <svg className="animate-spin h-10 w-10 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-10 w-10 text-purple-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     <p className="mt-3 text-lg font-semibold text-gray-700">Generating your look...</p>
+                    <p className="text-sm text-gray-600 mt-2">This may take 30-60 seconds</p>
                 </div>
             );
         }
         if (generatedImage) {
             return (
-                 <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 relative group">
+                <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 relative group">
                     <img src={generatedImage} alt="Generated Outfit" className="w-full h-full object-cover" />
                 </div>
             )
         }
-         return (
+        return (
             <ImageUploader
                 images={modelImage}
                 onImagesUpload={(files) => setModelImage(files.length > 0 ? [files[0]] : [])}
