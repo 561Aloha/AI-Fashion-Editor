@@ -9,11 +9,10 @@
 
 // Model options - choose the one that works best for your use case
 const HF_MODELS = {
-  REMBG: 'briaai/BRIA-2.0', // Better for clothing, preserves fine details
-  REMBG_ALT: 'facebook/detr-resnet50-panoptic', // Alternative semantic segmentation
+  RMBG: 'briaai/RMBG-1.4', // Background remover that returns an image
 };
 
-const SELECTED_MODEL = HF_MODELS.REMBG; // Using BRIA-2.0 as it's better for fashion items
+const SELECTED_MODEL = HF_MODELS.RMBG;
 
 /**
  * Remove background from an image using Hugging Face's free model
@@ -21,65 +20,31 @@ const SELECTED_MODEL = HF_MODELS.REMBG; // Using BRIA-2.0 as it's better for fas
  * @param hfApiKey - Hugging Face API key (get free one at huggingface.co)
  * @returns Promise<string> - Base64 encoded image with transparent background
  */
+// src/removeBackground.ts
 export async function removeImageBackgroundHF(
-  imageBase64: string,
-  hfApiKey?: string
+  imageBase64: string
 ): Promise<string> {
-  // If no API key provided, use environment variable or throw error
-  const apiKey = hfApiKey || process.env.REACT_APP_HF_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error(
-      'Hugging Face API key is required. ' +
-      'Get a free one at https://huggingface.co/settings/tokens ' +
-      'and set it as REACT_APP_HF_API_KEY environment variable.'
-    );
+  console.log('[DEBUG: removeImageBackgroundHF] Calling Netlify function /remove-bg');
+
+  const res = await fetch('/.netlify/functions/remove-bg', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64 }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('[DEBUG: removeImageBackgroundHF] Function error:', text);
+    throw new Error(text || 'Background removal failed via function');
   }
 
-  console.log('[DEBUG: removeImageBackgroundHF] Starting background removal with model:', SELECTED_MODEL);
-
-  try {
-    // Convert base64 to blob if needed
-    const imageBlob = base64ToBlob(imageBase64);
-
-    const response = await fetch(
-      `https://api-inference.huggingface.co/models/${SELECTED_MODEL}`,
-      {
-        headers: { Authorization: `Bearer ${apiKey}` },
-        method: 'POST',
-        body: imageBlob,
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error('[DEBUG: removeImageBackgroundHF] API Error:', errorData);
-      
-      // Check if model is loading
-      if (errorData.estimated_time) {
-        throw new Error(
-          `Hugging Face model is loading. Please try again in ${Math.ceil(errorData.estimated_time)} seconds.`
-        );
-      }
-      
-      throw new Error(
-        errorData.error || 
-        `Hugging Face API error: ${response.status} ${response.statusText}`
-      );
-    }
-
-    // Get the result as a blob and convert to base64
-    const resultBlob = await response.blob();
-    const resultBase64 = await blobToBase64(resultBlob);
-
-    console.log('[DEBUG: removeImageBackgroundHF] Background removal successful');
-    
-    return resultBase64;
-  } catch (error: any) {
-    console.error('[DEBUG: removeImageBackgroundHF] Error:', error);
-    throw new Error(`Background removal failed: ${error.message}`);
-  }
+  const data = await res.json(); // { processedBase64 }
+  console.log('[DEBUG: removeImageBackgroundHF] Function success');
+  return data.processedBase64;
 }
+
+
+
 
 /**
  * Alternative: Use a simple approach with canvas for quick testing
@@ -177,17 +142,17 @@ function blobToBase64(blob: Blob): Promise<string> {
  * Wrapper function that tries HF first, falls back to canvas if needed
  */
 export async function removeImageBackgroundWithFallback(
-  imageBase64: string,
-  hfApiKey?: string
+  imageBase64: string
 ): Promise<string> {
   try {
-    // Try Hugging Face first (better quality)
-    return await removeImageBackgroundHF(imageBase64, hfApiKey);
+    return await removeImageBackgroundHF(imageBase64);
   } catch (hfError: any) {
-    console.warn('[DEBUG: removeImageBackgroundWithFallback] HF failed, falling back to canvas:', hfError.message);
-    
+    console.warn(
+      '[DEBUG: removeImageBackgroundWithFallback] HF function failed, falling back to canvas:',
+      hfError.message
+    );
+
     try {
-      // Fall back to canvas-based removal
       return await removeImageBackgroundCanvas(imageBase64);
     } catch (canvasError) {
       console.error('[DEBUG: removeImageBackgroundWithFallback] Both methods failed');

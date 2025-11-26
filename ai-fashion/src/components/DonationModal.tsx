@@ -12,7 +12,6 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       {/* Click backdrop to close */}
       <div className="absolute inset-0" onClick={onClose}></div>
-      
       <div className="relative w-full max-w-md bg-white rounded-xl shadow-2xl border-[4px] border-black p-6 md:p-8 transform transition-all scale-100 z-10">
         
         {/* Close Button */}
@@ -29,7 +28,6 @@ export const DonationModal: React.FC<DonationModalProps> = ({ isOpen, onClose })
             <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 border-2 border-black mb-6 shadow-[2px_2px_0px_rgba(0,0,0,1)]">
                 <span className="text-3xl text-green-600 font-bold">$</span>
             </div>
-            
             <h3 className="text-2xl font-bold text-gray-900 mb-2">Support the Dev</h3>
             
             <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-3 mb-6">

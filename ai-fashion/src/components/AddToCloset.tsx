@@ -23,7 +23,7 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
     const [processingMethod, setProcessingMethod] = useState<'hf' | 'canvas'>('hf');
 
     const handleImageUpload = async (files: ImageFile[]) => {
-        setIsSaved(false); // Reset on new upload
+        setIsSaved(false); 
         if (files.length === 0) {
             setUploadedImage([]);
             setProcessedImageB64(null);
@@ -40,7 +40,6 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
 
         try {
             const imageBase64 = await fileToBase64Image(files[0].file);
-            // Use Hugging Face with fallback to canvas
             const resultBase64 = await removeImageBackgroundWithFallback(imageBase64.base64);
             setProcessedImageB64(resultBase64);
             console.log('[DEBUG: AddToCloset] Background removal successful. Processed image base64 snippet:', resultBase64.substring(0, 50) + '...');
@@ -74,8 +73,7 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
     return (
         <div>
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New Item</h3>
-            
-            {/* Note about Hugging Face API Key */}
+        
             {error && error.includes('API key') && (
                 <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
                     <p className="font-semibold mb-1">📝 Setup Required</p>
@@ -84,7 +82,9 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
                         <li>Visit <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="underline">huggingface.co/settings/tokens</a></li>
                         <li>Create a free account or sign in</li>
                         <li>Generate a new token (read access is fine)</li>
-                        <li>Add to your <code className="bg-blue-100 px-1 rounded">.env.local</code>: <code className="bg-blue-100 px-1 rounded">REACT_APP_HF_API_KEY=your_token_here</code></li>
+                        <li>Add to your <code className="bg-blue-100 px-1 rounded">.env.local</code>: 
+                        <code className="bg-blue-100 px-1 rounded">VITE_HF_API_KEY=your_token_here</code>
+                        </li>
                         <li>Restart your development server</li>
                     </ol>
                 </div>

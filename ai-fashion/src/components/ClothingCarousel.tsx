@@ -21,7 +21,6 @@ export const ClothingCarousel: React.FC<ClothingCarouselProps> = ({ items, curre
         if (!currentItem) return '';
         const src = currentItem.source;
         
-        // Already a data URL
         if (src.startsWith('data:image')) return src;
         
         // It's a base64 string (long string without slashes at start)
@@ -29,12 +28,10 @@ export const ClothingCarousel: React.FC<ClothingCarouselProps> = ({ items, curre
             return `data:image/png;base64,${src}`;
         }
         
-        // It's a local URL like "/blackskirt.jpeg" - use directly
         if (src.startsWith('/')) {
             return src;
         }
         
-        // External URL
         return src;
     };
 

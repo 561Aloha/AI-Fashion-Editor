@@ -83,7 +83,8 @@ export const Designer: React.FC<{
     modelImage: ImageFile[];
     setModelImage: React.Dispatch<React.SetStateAction<ImageFile[]>>;
     onNavigate: (view: View, mode?: ViewMode) => void;
-    }> = ({ mode, closet, setCloset, modelImage, setModelImage, onNavigate }) => {
+    selectedItemIds?: string[];
+    }> = ({ mode, closet, setCloset, modelImage, setModelImage, onNavigate, selectedItemIds = [] }) => {
 
     const [upperGarmentIndex, setUpperGarmentIndex] = useState(0);
     const [topIndex, setTopIndex] = useState(0);
@@ -180,7 +181,32 @@ export const Designer: React.FC<{
         }
         setIsTryOnMode(true);
     };
-
+    // Helper function to convert any source (URL, path, or base64) to Base64Image
+    const convertSourceToBase64 = async (source: string): Promise<Base64Image> => {
+        // If it's already base64 (long string without slashes)
+        if (source.length > 500 && !source.startsWith('/') && !source.startsWith('http')) {
+            return {
+                base64: source,
+                mimeType: 'image/png'
+            };
+        }
+        
+        // local inital clothing URL before they populate with their own items
+        if (source.startsWith('/')) {
+            const response = await fetch(source);
+            const blob = await response.blob();
+            return await fileToBase64Image(blob);
+        }
+        
+        if (source.startsWith('http')) {
+            return await urlToBase64Image(source);
+        }
+        
+        return {
+            base64: source,
+            mimeType: 'image/png'
+        };
+    };
     const handleGenerate = useCallback(async () => {
         console.log('🎨 DESIGNER: handleGenerate triggered.');
         if (modelImage.length === 0) {
@@ -188,27 +214,63 @@ export const Designer: React.FC<{
             return;
         }
 
-        let descriptionParts: string[] = [];
+        const clothingToSend: Base64Image[] = [];
         
+        // Filter to only selected items if any are selected
+        const itemsToUse = selectedItemIds && selectedItemIds.length > 0 
+            ? closet.filter(item => selectedItemIds.includes(item.id))
+            : [];
+
         if (tryOnOutfitType === 'dress') {
-            if (dresses.length > 0) descriptionParts.push('a dress');
-            if (shoes.length > 0) descriptionParts.push('shoes');
+            const selectedDress = itemsToUse.find(item => item.category === 'dress');
+            if (selectedDress) {
+                // imageB64 is already a base64 string stored in closet
+                clothingToSend.push({
+                    base64: selectedDress.imageB64,
+                    mimeType: 'image/png'
+                });
+            } else if (dresses.length > 0) {
+                const dressSource = dresses[dressIndex].source;
+                // ← FIX: Check if it's a URL/path or base64
+                const dressB64 = await convertSourceToBase64(dressSource);
+                clothingToSend.push(dressB64);
+            }
         } else if (tryOnOutfitType === 'top-bottom') {
-            if (tops.length > 0) descriptionParts.push('a top');
-            if (bottoms.length > 0) descriptionParts.push('bottoms');
+            const selectedTop = itemsToUse.find(item => item.category === 'top');
+            if (selectedTop) {
+                clothingToSend.push({
+                    base64: selectedTop.imageB64,
+                    mimeType: 'image/png'
+                });
+            } else if (tops.length > 0) {
+                const topSource = tops[topIndex].source;
+                // ← FIX: Check if it's a URL/path or base64
+                const topB64 = await convertSourceToBase64(topSource);
+                clothingToSend.push(topB64);
+            }
+
+            const selectedBottom = itemsToUse.find(item => item.category === 'bottoms');
+            if (selectedBottom) {
+                clothingToSend.push({
+                    base64: selectedBottom.imageB64,
+                    mimeType: 'image/png'
+                });
+            } else if (bottoms.length > 0) {
+                const bottomSource = bottoms[bottomIndex].source;
+                // ← FIX: Check if it's a URL/path or base64
+                const bottomB64 = await convertSourceToBase64(bottomSource);
+                clothingToSend.push(bottomB64);
+            }
         }
         
-        if (descriptionParts.length === 0) {
+        if (clothingToSend.length === 0) {
             setError("No clothing items to generate.");
             return;
         }
 
-        const clothingDescription = descriptionParts.join(' and ');
         const effectivePrompt = prompt.trim() 
-            ? `Person wearing ${clothingDescription}. ${prompt}`
-            : `Person wearing ${clothingDescription}. Professional fashion photography.`;
-        
-        console.log('[DEBUG: Designer] Generation parameters:', { tryOnOutfitType, prompt: effectivePrompt });
+            ? `Person wearing outfit. ${prompt}`
+            : `Person wearing outfit. Professional fashion photography.`;
 
         setIsLoading(true);
         setError(null);
@@ -218,23 +280,19 @@ export const Designer: React.FC<{
             console.log('🎨 DESIGNER: Converting model image to base64...');
             
             const fileInput = modelImage[0]?.file;
-            console.log('🎨 DESIGNER: fileInput type:', typeof fileInput);
-            console.log('🎨 DESIGNER: fileInput instanceof File:', fileInput instanceof File);
-            console.log('🎨 DESIGNER: fileInput instanceof Blob:', fileInput instanceof Blob);
-
             if (!fileInput) {
                 throw new Error('No file in modelImage');
             }
 
-            // fileToBase64Image now handles File, Blob, or string
             let modelB64 = await fileToBase64Image(fileInput);
             console.log('🎨 DESIGNER: Model image converted');
             console.log('🎨 DESIGNER: Base64 length:', modelB64.base64.length);
+            console.log('🎨 DESIGNER: Clothing items count:', clothingToSend.length);
 
             console.log('🎨 DESIGNER: Calling Hugging Face Virtual Try-On...');
             const resultB64 = await generateVirtualTryOnHybrid(
                 modelB64.base64,
-                [],
+                clothingToSend,
                 effectivePrompt
             );
             
@@ -249,17 +307,16 @@ export const Designer: React.FC<{
         } finally {
             setIsLoading(false);
         }
-    }, [modelImage, tryOnOutfitType, dresses, dressIndex, tops, topIndex, bottoms, bottomIndex, shoes, shoesIndex, prompt]);
-    
-    const createIndexChanger = (setter: React.Dispatch<React.SetStateAction<number>>, max: number) => (direction: 'next' | 'prev') => {
-        if (max === 0) return;
-        setter(prev => {
-            const newIndex = direction === 'next' ? prev + 1 : prev - 1;
-            if (newIndex >= max) return 0;
-            if (newIndex < 0) return max - 1;
-            return newIndex;
-        });
-    };
+    }, [modelImage, tryOnOutfitType, closet, selectedItemIds, dresses, dressIndex, tops, topIndex, bottoms, bottomIndex, prompt]);
+        const createIndexChanger = (setter: React.Dispatch<React.SetStateAction<number>>, max: number) => (direction: 'next' | 'prev') => {
+            if (max === 0) return;
+            setter(prev => {
+                const newIndex = direction === 'next' ? prev + 1 : prev - 1;
+                if (newIndex >= max) return 0;
+                if (newIndex < 0) return max - 1;
+                return newIndex;
+            });
+        };
     
     const handleNextUpperGarment = createIndexChanger(setUpperGarmentIndex, upperGarments.length);
     const handlePrevUpperGarment = createIndexChanger(setUpperGarmentIndex, upperGarments.length);
