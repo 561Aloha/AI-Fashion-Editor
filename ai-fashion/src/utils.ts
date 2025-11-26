@@ -1,93 +1,105 @@
-import type { Base64Image } from '../src/types';
 
-export const fileToBase64Image = (file: File): Promise<Base64Image> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(',')[1];
-      resolve({ base64, mimeType: file.type });
-    };
-    reader.onerror = (error) => reject(error);
-  });
+import type { Base64Image } from './types';
+
+// Helper to resize image to reduce token usage for API
+const resizeImage = (blob: Blob, maxWidth: number, maxHeight: number): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            // Calculate new dimensions keeping aspect ratio
+            if (width > maxWidth || height > maxHeight) {
+                if (width > height) {
+                    height = Math.round((height * maxWidth) / width);
+                    width = maxWidth;
+                } else {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(img, 0, 0, width, height);
+                // Compress to JPEG 0.7 to significantly reduce size/tokens while maintaining decent quality
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                resolve(dataUrl);
+            } else {
+                reject(new Error("Canvas context not available"));
+            }
+            URL.revokeObjectURL(img.src);
+        };
+        img.onerror = (err) => {
+             URL.revokeObjectURL(img.src);
+             reject(err);
+        };
+    });
 };
 
-export const urlToBase64Image = (url: string): Promise<Base64Image> => {
-  return new Promise((resolve, reject) => {
-    // If it's already a base64 string (long string, not a URL path)
-    if (url.length > 500 && !url.startsWith('/') && !url.startsWith('http')) {
-      resolve({ base64: url, mimeType: 'image/png' });
-      return;
+export const fileToBase64Image = async (file: File): Promise<Base64Image> => {
+    try {
+        // Resize to max 1024x1024. This prevents hitting the input_token_count limit on the free tier.
+        const resizedDataUrl = await resizeImage(file, 1024, 1024);
+        const base64 = resizedDataUrl.split(',')[1];
+        // Always return as jpeg after resize for consistency and size
+        return { base64, mimeType: 'image/jpeg' };
+    } catch (e) {
+        console.warn("Image resize failed, falling back to original", e);
+         return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => {
+                const result = reader.result as string;
+                const base64 = result.split(',')[1];
+                resolve({ base64, mimeType: file.type });
+            };
+            reader.onerror = (error) => reject(error);
+        });
     }
+};
 
-    // If it's already a data URL
-    if (url.startsWith('data:image')) {
-      const parts = url.split(',');
-      const mimeMatch = parts[0].match(/data:(.*?);/);
-      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-      resolve({ base64: parts[1], mimeType });
-      return;
-    }
+export const urlToBase64Image = async (url: string): Promise<Base64Image> => {
+  const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+  
+  let blob: Blob;
 
-    // For local files (/whitetee.jpeg) or external URLs
-    // Use Image + Canvas approach - NO CORS proxy needed for local files!
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-
-    img.onload = () => {
+  try {
+      // Try fetching directly first
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Direct fetch failed");
+      blob = await response.blob();
+  } catch(e) {
+      // Fallback to proxy
       try {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          reject(new Error('Could not get canvas context'));
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0);
-        const dataURL = canvas.toDataURL('image/png');
-        const base64 = dataURL.split(',')[1];
-        resolve({ base64, mimeType: 'image/png' });
-      } catch (e) {
-        reject(new Error(`Failed to convert image to base64: ${url}`));
+        const response = await fetch(proxyUrl + url);
+        if (!response.ok) throw new Error(`Failed to fetch image from ${url}`);
+        blob = await response.blob();
+      } catch (proxyError) {
+          throw new Error(`Could not load image. It might be blocked by CORS or the link is broken.`);
       }
-    };
-
-    img.onerror = () => {
-      reject(new Error(`Failed to load image: ${url}`));
-    };
-
-    // Use the URL directly - no proxy!
-    img.src = url;
-  });
-};
-
-export const urlToBase64 = async (url: string): Promise<string> => {
-  // If it's already base64, return as-is
-  if (url.startsWith('data:image') || url.length > 500) {
-    return url.replace(/^data:image\/\w+;base64,/, '');
   }
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Could not get canvas context'));
-        return;
-      }
-      ctx.drawImage(img, 0, 0);
-      const dataURL = canvas.toDataURL('image/png');
-      const base64 = dataURL.replace(/^data:image\/\w+;base64,/, '');
-      resolve(base64);
-    };
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-    img.src = url;
-  });
+  
+  try {
+      const resizedDataUrl = await resizeImage(blob, 1024, 1024);
+      const base64 = resizedDataUrl.split(',')[1];
+      return { base64, mimeType: 'image/jpeg' };
+  } catch (e) {
+      // Fallback
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.split(',')[1];
+          resolve({ base64, mimeType: blob.type });
+        };
+        reader.onerror = (error) => reject(error);
+      });
+  }
 };

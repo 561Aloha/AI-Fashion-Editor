@@ -7,6 +7,52 @@ import { ImageUploader } from './ImageUploader';
 import { generateFashionImage } from './geminiService';
 import { fileToBase64Image, urlToBase64Image } from '../utils';
 
+// ============ IMAGE COMPRESSION FUNCTION ============
+const compressBase64Image = async (base64: string, maxWidth = 600, maxHeight = 800, quality = 0.55): Promise<string> => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${base64}`;
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+
+            // Scale down if too large
+            if (width > height) {
+                if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                }
+            } else {
+                if (height > maxHeight) {
+                    width *= maxHeight / height;
+                    height = maxHeight;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob(
+                (blob) => {
+                    if (blob) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            const compressed = reader.result as string;
+                            resolve(compressed.split(',')[1]); // Return just base64
+                        };
+                        reader.readAsDataURL(blob);
+                    }
+                },
+                'image/jpeg',
+                quality
+            );
+        };
+    });
+};
+
 const ActionButton: React.FC<{
     onClick: () => void;
     children: React.ReactNode;
@@ -31,7 +77,6 @@ const getImageSrc = (source: string) => {
     return source;
 };
 
-
 export const Designer: React.FC<{ 
     mode: ViewMode;
     closet: ClosetItem[];
@@ -41,7 +86,6 @@ export const Designer: React.FC<{
     onNavigate: (view: View, mode?: ViewMode) => void;
     }> = ({ mode, closet, setCloset, modelImage, setModelImage, onNavigate }) => {
 
-    
     const [upperGarmentIndex, setUpperGarmentIndex] = useState(0);
     const [topIndex, setTopIndex] = useState(0);
     const [bottomIndex, setBottomIndex] = useState(0);
@@ -49,7 +93,7 @@ export const Designer: React.FC<{
     const [shoesIndex, setShoesIndex] = useState(0);
 
     const [tryOnOutfitType, setTryOnOutfitType] = useState<'dress' | 'top-bottom' | null>(null);
-    const [isTryOnMode, setTryOnMode] = useState(false);
+    const [isTryOnMode, setIsTryOnMode] = useState(false);
     const [prompt, setPrompt] = useState<string>('');
     const [generatedImage, setGeneratedImage] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -135,11 +179,11 @@ export const Designer: React.FC<{
             setTopIndex(currentTopInTopsArray >= 0 ? currentTopInTopsArray : 0);
             setTryOnOutfitType('top-bottom');
         }
-        setTryOnMode(true);
+        setIsTryOnMode(true);
     };
 
     const handleGenerate = useCallback(async () => {
-        console.log('[DEBUG: Designer] handleGenerate triggered.');
+        console.log('🎨 DESIGNER: handleGenerate triggered.');
         if (modelImage.length === 0) {
             setError("Please upload a model image.");
             return;
@@ -168,25 +212,43 @@ export const Designer: React.FC<{
         setGeneratedImage(null);
 
         try {
-            const modelB64 = await fileToBase64Image(modelImage[0].file);
+            console.log('🎨 DESIGNER: Converting model image to base64...');
+            let modelB64 = await fileToBase64Image(modelImage[0].file);
+            
+            // ✅ COMPRESS MODEL IMAGE
+            console.log('🎨 DESIGNER: Compressing model image...');
+            modelB64.base64 = await compressBase64Image(modelB64.base64, 600, 800, 0.55);
+            console.log('🎨 DESIGNER: Model image compressed');
+
             const clothingB64s: Base64Image[] = await Promise.all(
                 itemsToProcess.map(async (source) => {
+                    let base64 = '';
                     if (source.startsWith('data:image')) {
-                        return { base64: source.split(',')[1], mimeType: 'image/png' };
+                        base64 = source.split(',')[1];
+                    } else if (source.length > 500) { 
+                        base64 = source;
+                    } else {
+                        const result = await urlToBase64Image(source);
+                        base64 = result.base64;
                     }
-                    if (source.length > 500) { 
-                        return { base64: source, mimeType: 'image/png' };
-                    }
-                    return await urlToBase64Image(source);
+                    
+                    // ✅ COMPRESS EACH CLOTHING ITEM
+                    console.log('🎨 DESIGNER: Compressing clothing item...');
+                    const compressed = await compressBase64Image(base64, 400, 600, 0.55);
+                    console.log('🎨 DESIGNER: Clothing item compressed');
+                    
+                    return { base64: compressed, mimeType: 'image/jpeg' };
                 })
             );
 
+            console.log('🎨 DESIGNER: All images compressed, calling Gemini API...');
             const resultB64 = await generateFashionImage(modelB64.base64, clothingB64s, effectivePrompt);
             const imageSrc = `data:image/png;base64,${resultB64}`;
             setGeneratedImage(imageSrc);
-            console.log('[DEBUG: Designer] Image generation successful. Result snippet:', imageSrc.substring(0, 50) + '...');
+            console.log('🎨 DESIGNER: Image generation successful!');
 
         } catch (e: any) {
+            console.error('❌ DESIGNER ERROR:', e.message);
             setError(e.message || "An unexpected error occurred during image generation.");
             console.error('[DEBUG: Designer] Error during generation:', e);
         } finally {
@@ -249,7 +311,7 @@ export const Designer: React.FC<{
         return (
             <div className="w-full text-gray-800 relative">
                 <button 
-                    onClick={() => { setTryOnMode(false); setTryOnOutfitType(null); setGeneratedImage(null); setError(null); }} 
+                    onClick={() => { setIsTryOnMode(false); setTryOnOutfitType(null); setGeneratedImage(null); setError(null); }} 
                     className="absolute top-[-24px] left-0 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-lg transition-all border-2 border-black text-sm z-10 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
                 >
                     &larr; Back to Browse

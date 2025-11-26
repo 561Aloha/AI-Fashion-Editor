@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { ImageUploader } from './ImageUploader';
-import { removeImageBackground } from './geminiService';
+import { removeImageBackgroundWithFallback } from '../removeBackground';
 import type { ImageFile, ClosetCategory, ClosetItem, ClothingStyle } from '../types';
 import { fileToBase64Image } from '../utils';
 
 interface AddToClosetProps {
-    onSave: (item: Omit<ClosetItem, 'id'>) => void;
+    onSave: (item: Omit<ClosetItem, 'id' | 'isFavorite'>) => void;
 }
 
 const CATEGORIES: ClosetCategory[] = ['top', 'bottoms', 'dress', 'shoes'];
 const STYLES: ClothingStyle[] = ['work', 'weekend', 'both'];
+
 
 export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
     const [uploadedImage, setUploadedImage] = useState<ImageFile[]>([]);
@@ -19,9 +20,10 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isSaved, setIsSaved] = useState(false);
+    const [processingMethod, setProcessingMethod] = useState<'hf' | 'canvas'>('hf');
 
     const handleImageUpload = async (files: ImageFile[]) => {
-        setIsSaved(false);
+        setIsSaved(false); // Reset on new upload
         if (files.length === 0) {
             setUploadedImage([]);
             setProcessedImageB64(null);
@@ -34,12 +36,14 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
         setIsLoading(true);
         setError(null);
         setProcessedImageB64(null);
+        setProcessingMethod('hf');
 
         try {
             const imageBase64 = await fileToBase64Image(files[0].file);
-            const resultBase64 = await removeImageBackground(imageBase64.base64);
+            // Use Hugging Face with fallback to canvas
+            const resultBase64 = await removeImageBackgroundWithFallback(imageBase64.base64);
             setProcessedImageB64(resultBase64);
-            console.log('[DEBUG: AddToCloset] Background analysis successful. Processed image base64 snippet:', resultBase64.substring(0, 50) + '...');
+            console.log('[DEBUG: AddToCloset] Background removal successful. Processed image base64 snippet:', resultBase64.substring(0, 50) + '...');
         } catch (e: any) {
             setError(e.message || "Failed to process image.");
             console.error('[DEBUG: AddToCloset] Error during background removal:', e);
@@ -64,12 +68,30 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
         setStyle('weekend');
         setError(null);
         setIsSaved(false);
+        setProcessingMethod('hf');
     };
 
     return (
         <div>
-            <h3>Add New Item</h3>
-            <div className="grid-cols-1">
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Add New Item</h3>
+            
+            {/* Note about Hugging Face API Key */}
+            {error && error.includes('API key') && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-700">
+                    <p className="font-semibold mb-1">📝 Setup Required</p>
+                    <p className="mb-2">To use AI background removal, you need a free Hugging Face API key:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-xs">
+                        <li>Visit <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" className="underline">huggingface.co/settings/tokens</a></li>
+                        <li>Create a free account or sign in</li>
+                        <li>Generate a new token (read access is fine)</li>
+                        <li>Add to your <code className="bg-blue-100 px-1 rounded">.env.local</code>: <code className="bg-blue-100 px-1 rounded">REACT_APP_HF_API_KEY=your_token_here</code></li>
+                        <li>Restart your development server</li>
+                    </ol>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                {/* Left column: Uploader */}
                 <div>
                      <ImageUploader 
                         images={uploadedImage} 
@@ -79,6 +101,8 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
                         helpText="PNG, JPG, etc." 
                     />
                 </div>
+
+                {/* Right column: Preview, Categorize & Save */}
                 <div className="space-y-4">
                     <label className="block text-sm font-medium text-gray-700">2. Categorize & Save</label>
                     
@@ -90,6 +114,9 @@ export const AddToCloset: React.FC<AddToClosetProps> = ({ onSave }) => {
                                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                 </svg>
                                 <p className="mt-2">Removing background...</p>
+                                {processingMethod === 'canvas' && (
+                                    <p className="text-xs text-gray-400 mt-1">(Using canvas fallback)</p>
+                                )}
                             </div>
                         ) : processedImageB64 ? (
                             <img src={`data:image/png;base64,${processedImageB64}`} alt="Processed clothing item" className="max-h-48 object-contain" />

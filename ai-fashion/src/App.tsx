@@ -4,6 +4,7 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { MainMenu } from './components/MainMenu';
 import { Designer } from './components/Designer';
+import { DonationModal } from './components/DonationModal';
 import { ClosetManager, AIStudio } from './components/ClosetManager';
 import { MyCreations } from './components/Favorites';
 import { ClosetGallery } from './components/ClosetGallery';
@@ -39,6 +40,7 @@ export default function App() {
     
     const [view, setView] = useState<View>('menu');
     const [viewMode, setViewMode] = useState<ViewMode>('weekend');
+    const [isDonationModalOpen, setIsDonationModalOpen] = useState(false);
     
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
     const [closet, setCloset] = useState<ClosetItem[]>([]);
@@ -254,6 +256,17 @@ export default function App() {
     if (!user) {
         return (
             <div className="app-container" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1574868808703-a3b3f75b8394?q=80&w=2574&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')" }}>
+                {/* Donation Button */}
+                <button
+                    onClick={() => setIsDonationModalOpen(true)}
+                    className="fixed top-4 right-4 z-40 bg-green-400 hover:bg-green-500 text-black font-bold h-12 w-12 rounded-full border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center"
+                    title="Support the Developer"
+                >
+                    <span className="text-2xl">$</span>
+                </button>
+
+                <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
+                
                 <div className="card-wrapper">
                     <header className="app-header">
                         <h1>Cyber Closet</h1>
@@ -269,6 +282,17 @@ export default function App() {
     // Main app (user is logged in)
     return (
         <div className="app-container" style={{ backgroundImage: "url('https://images.unsplash.com/photo-1574868808703-a3b3f75b8394?q=80&w=2574&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D')" }}>
+
+            {/* Donation Button */}
+            <button
+                onClick={() => setIsDonationModalOpen(true)}
+                className="fixed top-4 right-4 z-40 bg-green-400 hover:bg-green-500 text-black font-bold h-12 w-12 rounded-full border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all flex items-center justify-center"
+                title="Support the Developer"
+            >
+                <span className="text-2xl">$</span>
+            </button>
+
+            <DonationModal isOpen={isDonationModalOpen} onClose={() => setIsDonationModalOpen(false)} />
             <div className="card-wrapper">
                 <header className="app-header">
                     <h1>Cyber Closet</h1>
