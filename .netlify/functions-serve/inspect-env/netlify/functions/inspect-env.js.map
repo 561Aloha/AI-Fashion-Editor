@@ -1,0 +1,8 @@
+{
+  "version": 3,
+  "sources": ["../../../../../../../Users/diannadimambro/Desktop/Ai-Fashion/ai-fashion/netlify/functions/inspect-env.ts"],
+  "sourceRoot": "/private/var/folders/vt/z85nzmp92jj512t7c74nfw5w0000gn/T/tmp-88664-czLZ14BeU4W4",
+  "sourcesContent": ["import type { Handler } from '@netlify/functions';\n\nexport const handler: Handler = async () => {\n  return {\n    statusCode: 200,\n    headers: {\n      'Content-Type': 'application/json',\n      'Access-Control-Allow-Origin': '*',\n    },\n    body: JSON.stringify(\n      {\n        HF_API_KEY: process.env.HF_API_KEY || null,\n        KEYS: Object.keys(process.env || {}), // just to see what\u2019s there\n      },\n      null,\n      2\n    ),\n  };\n};\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAEO,IAAM,UAAmB,YAAY;AAC1C,SAAO;AAAA,IACL,YAAY;AAAA,IACZ,SAAS;AAAA,MACP,gBAAgB;AAAA,MAChB,+BAA+B;AAAA,IACjC;AAAA,IACA,MAAM,KAAK;AAAA,MACT;AAAA,QACE,YAAY,QAAQ,IAAI,cAAc;AAAA,QACtC,MAAM,OAAO,KAAK,QAAQ,OAAO,CAAC,CAAC;AAAA;AAAA,MACrC;AAAA,MACA;AAAA,MACA;AAAA,IACF;AAAA,EACF;AACF;",
+  "names": []
+}

@@ -1,0 +1,5 @@
+{
+  "name": "AI Fashion Designer",
+  "description": "An application that allows users to upload an image of a model, provide additional clothing images or a text prompt, and use AI to generate a new image with the swapped outfits. Users can save their creations to a personal collection.",
+  "requestFramePermissions": []
+}

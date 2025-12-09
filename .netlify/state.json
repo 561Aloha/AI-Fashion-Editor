@@ -1,0 +1,21 @@
+{
+	"geolocation": {
+		"data": {
+			"city": "Palm Beach Gardens",
+			"country": {
+				"code": "US",
+				"name": "United States"
+			},
+			"subdivision": {
+				"code": "FL",
+				"name": "Florida"
+			},
+			"timezone": "America/New_York",
+			"latitude": 26.8238,
+			"longitude": -80.1407,
+			"postalCode": "33410"
+		},
+		"timestamp": 1765306055879
+	},
+	"siteId": "e8fc4deb-21e0-4d07-bfee-c192bb082b1c"
+}

@@ -1,0 +1,211 @@
+// src/utils.ts
+import { storage } from './firebase';
+import { ref, getBytes } from 'firebase/storage';
+import type { Base64Image } from './types';
+
+/**
+ * Resize an image Blob in the browser and return a data URL.
+ * - Use JPEG/WebP for photos (smaller).
+ * - Use PNG if you must preserve transparency (garments).
+ */
+const resizeImage = (
+  blob: Blob,
+  maxWidth: number,
+  maxHeight: number,
+  opts?: { format?: 'image/png' | 'image/jpeg' | 'image/webp'; quality?: number }
+): Promise<string> => {
+  const format = opts?.format ?? 'image/jpeg';
+  const quality = opts?.quality ?? 0.82;
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      try {
+        let width = img.width;
+        let height = img.height;
+
+        // scale down while keeping aspect ratio
+        if (width > maxWidth || height > maxHeight) {
+          const scale = Math.min(maxWidth / width, maxHeight / height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Canvas context not available');
+
+        // JPEG has no alpha; paint a background for model photos, etc.
+        if (format === 'image/jpeg') {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const dataUrl =
+          format === 'image/png'
+            ? canvas.toDataURL('image/png')
+            : format === 'image/webp'
+              ? canvas.toDataURL('image/webp', quality)
+              : canvas.toDataURL('image/jpeg', quality);
+
+        resolve(dataUrl);
+      } catch (e) {
+        reject(e);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    img.onerror = (err) => {
+      URL.revokeObjectURL(url);
+      reject(err);
+    };
+
+    img.src = url;
+  });
+};
+
+/**
+ * Convert File, Blob, or base64 string to Base64Image.
+ * By default outputs JPEG (smaller) unless you specify PNG (to preserve transparency).
+ */
+export const fileToBase64Image = async (
+  input: File | Blob | string,
+  opts?: {
+    maxWidth?: number;
+    maxHeight?: number;
+    format?: 'image/png' | 'image/jpeg' | 'image/webp';
+    quality?: number;
+  }
+): Promise<Base64Image> => {
+  try {
+    if (typeof input === 'string') {
+      if (input.startsWith('http') || input.startsWith('/')) {
+        throw new Error(
+          'fileToBase64Image received a URL/path string; use urlToBase64Image instead.'
+        );
+      }
+      // Assume it's already base64 (no data URL header)
+      return { base64: input, mimeType: 'image/png' };
+    }
+
+    const maxWidth = opts?.maxWidth ?? 1024;
+    const maxHeight = opts?.maxHeight ?? 1024;
+    const format = opts?.format ?? 'image/jpeg';
+    const quality = opts?.quality ?? 0.82;
+
+    const outMime: Base64Image['mimeType'] =
+      format === 'image/png' ? 'image/png' : format === 'image/webp' ? 'image/webp' : 'image/jpeg';
+
+    try {
+      const resizedDataUrl = await resizeImage(input, maxWidth, maxHeight, { format, quality });
+      const base64 = resizedDataUrl.split(',')[1];
+      return { base64, mimeType: outMime };
+    } catch (resizeError) {
+      console.warn('[fileToBase64Image] Resize failed, falling back to original', resizeError);
+
+      // Fallback: convert without resizing
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(input);
+        reader.onload = () => {
+          const result = reader.result as string;
+          const base64 = result.split(',')[1];
+          const mimeType =
+            input instanceof File && input.type ? (input.type as any) : ('image/png' as const);
+          resolve({ base64, mimeType });
+        };
+        reader.onerror = (error) => reject(error);
+      });
+    }
+  } catch (e: any) {
+    console.error('[fileToBase64Image] Error:', e?.message);
+    throw e;
+  }
+};
+
+/**
+ * Load image from URL into Base64Image.
+ * Supports Firebase Storage download URLs using the Storage SDK.
+ *
+ * kind:
+ * - 'model'  : optimize for photos (JPEG)
+ * - 'garment': preserve transparency if PNG/WebP, and use smaller size (faster HF)
+ */
+export async function urlToBase64Image(
+  url: string,
+  opts?: { kind?: 'model' | 'garment' }
+): Promise<Base64Image> {
+  const kind = opts?.kind ?? 'model';
+  const max = kind === 'garment' ? 768 : 1024;
+
+  try {
+    // Firebase Storage download URL
+    if (url.includes('firebasestorage.googleapis.com') && url.includes('/o/')) {
+      const u = new URL(url);
+
+      // everything after "/o/" is url-encoded object path
+      const encoded = u.pathname.split('/o/')[1];
+      if (!encoded) throw new Error('Could not parse Firebase Storage path from URL');
+
+      const fullPath = decodeURIComponent(encoded);
+      console.log('[urlToBase64Image] Using Storage SDK, path =', fullPath);
+
+      const storageRef = ref(storage, fullPath);
+      const bytes = await getBytes(storageRef);
+
+      const ext = fullPath.split('.').pop()?.toLowerCase();
+      const mimeType =
+        ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+
+      const blob = new Blob([bytes], { type: mimeType });
+
+      const format =
+        kind === 'garment'
+          ? mimeType === 'image/png'
+            ? 'image/png'
+            : mimeType === 'image/webp'
+              ? 'image/webp'
+              : 'image/jpeg'
+          : 'image/jpeg';
+
+      return await fileToBase64Image(blob, {
+        maxWidth: max,
+        maxHeight: max,
+        format,
+        quality: 0.82,
+      });
+    }
+
+    // Non-firebase URL
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+
+    const format =
+      kind === 'garment'
+        ? blob.type === 'image/png'
+          ? 'image/png'
+          : blob.type === 'image/webp'
+            ? 'image/webp'
+            : 'image/jpeg'
+        : 'image/jpeg';
+
+    return await fileToBase64Image(blob, {
+      maxWidth: max,
+      maxHeight: max,
+      format,
+      quality: 0.82,
+    });
+  } catch (err) {
+    console.error('[urlToBase64Image] Error loading URL:', url, err);
+    throw new Error('Could not load image. It might be blocked by CORS or the link is broken.');
+  }
+}

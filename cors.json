@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:8888", "http://localhost:3000", "http://localhost:3001"],
+    "method": ["GET", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "x-goog-resumable", "x-goog-meta-*", "x-goog-generation", "x-goog-hash"],
+    "maxAgeSeconds": 3600
+  }
+]

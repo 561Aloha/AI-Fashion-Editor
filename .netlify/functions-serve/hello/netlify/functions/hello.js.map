@@ -1,0 +1,8 @@
+{
+  "version": 3,
+  "sources": ["../../../../../../../Users/diannadimambro/Desktop/Ai-Fashion/ai-fashion/netlify/functions/hello.ts"],
+  "sourceRoot": "/private/var/folders/vt/z85nzmp92jj512t7c74nfw5w0000gn/T/tmp-88664-9FEEV30DNlV4",
+  "sourcesContent": ["// netlify/functions/hello.ts\nimport type { Handler } from '@netlify/functions';\n\nexport const handler: Handler = async () => {\n  return {\n    statusCode: 200,\n    body: 'Hello from Netlify functions \uD83D\uDC4B',\n  };\n};\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;AAAA;AAAA;AAAA;AAAA;AAAA;AAGO,IAAM,UAAmB,YAAY;AAC1C,SAAO;AAAA,IACL,YAAY;AAAA,IACZ,MAAM;AAAA,EACR;AACF;",
+  "names": []
+}
