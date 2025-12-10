@@ -2530,7 +2530,7 @@ function buildGarmentDes(userPrompt) {
   const isPants = /\bpants\b|\btrousers\b/.test(p);
   let constraints = "Preserve garment identity, silhouette, length, seams, and texture. Photorealistic.";
   if (isJeans) {
-    constraints = "This is full-length denim jeans. Keep as jeans (not shorts, not skirt). Preserve exact denim wash/fade contrast, whiskering, seams, pockets, and hem. Photorealistic.";
+    constraints = "This is FULL-LENGTH denim jeans extending to the ankles. CRITICAL: Keep as full-length jeans (not shorts, not skirt). Preserve exact denim wash/fade contrast, detailed seams, whiskering, pockets, and hem. Photorealistic. DO NOT CROP LENGTH. The garment extends down the full visible leg. Show complete leg coverage.";
   } else if (isSkirt) {
     constraints = "This is a skirt. Keep as skirt (not pants/jeans/shorts). Preserve skirt length, pleats/shape, fabric texture, seams, and hem. Photorealistic.";
   } else if (isShorts) {
@@ -2539,9 +2539,10 @@ function buildGarmentDes(userPrompt) {
     constraints = "This is pants. Keep as pants (not shorts, not skirt). Preserve length, fit, seams, and fabric texture. Photorealistic.";
   }
   const ignoreExtras = "Use only the clothing item; ignore any mannequin/body/hands/background in the garment image.";
-  const negative = "Do not change garment category. Do not invent extra straps/cuts. No cropped length.";
+  const negative = "Do not change garment category. Do not invent extra straps/cuts. NO CROPPED LENGTH.";
   const prefix = userPrompt?.trim() ? `${userPrompt.trim()}. ` : "";
-  return `${prefix}${constraints} ${ignoreExtras} ${negative}`.slice(0, 200);
+  const finalPrompt = `${negative} ${constraints} ${prefix}${ignoreExtras}`.slice(0, 1e3);
+  return finalPrompt;
 }
 var cachedClient = null;
 async function getClient() {

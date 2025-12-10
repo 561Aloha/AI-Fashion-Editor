@@ -27,17 +27,20 @@ function dataUrlToBlob(dataUrl: string): Blob {
 function buildGarmentDes(userPrompt?: string) {
   const p = (userPrompt ?? '').trim().toLowerCase();
 
+  // 1. More robust classification
   const isJeans = /\bjeans?\b|\bdenim\b/.test(p) && !/\bjacket\b/.test(p);
   const isSkirt = /\bskirt\b/.test(p);
   const isShorts = /\bshorts?\b/.test(p);
   const isPants = /\bpants\b|\btrousers\b/.test(p);
 
+  // 2. Default constraints (kept general)
   let constraints =
     'Preserve garment identity, silhouette, length, seams, and texture. Photorealistic.';
 
   if (isJeans) {
+    // 3. Strengthened Jeans Constraints
     constraints =
-      'This is full-length denim jeans. Keep as jeans (not shorts, not skirt). Preserve exact denim wash/fade contrast, whiskering, seams, pockets, and hem. Photorealistic.';
+      'This is FULL-LENGTH denim jeans extending to the ankles. CRITICAL: Keep as full-length jeans (not shorts, not skirt). Preserve exact denim wash/fade contrast, detailed seams, whiskering, pockets, and hem. Photorealistic. DO NOT CROP LENGTH. The garment extends down the full visible leg. Show complete leg coverage.';
   } else if (isSkirt) {
     constraints =
       'This is a skirt. Keep as skirt (not pants/jeans/shorts). Preserve skirt length, pleats/shape, fabric texture, seams, and hem. Photorealistic.';
@@ -51,11 +54,16 @@ function buildGarmentDes(userPrompt?: string) {
 
   const ignoreExtras =
     'Use only the clothing item; ignore any mannequin/body/hands/background in the garment image.';
+  
   const negative =
-    'Do not change garment category. Do not invent extra straps/cuts. No cropped length.';
+    'Do not change garment category. Do not invent extra straps/cuts. NO CROPPED LENGTH.';
 
   const prefix = userPrompt?.trim() ? `${userPrompt.trim()}. ` : '';
-  return `${prefix}${constraints} ${ignoreExtras} ${negative}`.slice(0, 200);
+  
+  // Final constructed prompt - increased to 1000 chars to avoid truncation
+  const finalPrompt = `${negative} ${constraints} ${prefix}${ignoreExtras}`.slice(0, 1000);
+
+  return finalPrompt;
 }
 
 // ---- Reuse Gradio client on warm invocations ----
