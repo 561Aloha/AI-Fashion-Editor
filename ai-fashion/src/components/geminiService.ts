@@ -2,8 +2,8 @@
 import { GoogleGenAI, Part } from "@google/genai";
 import type { Base64Image } from '../types';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY
+})
 const handleGeminiError = (error: any) => {
   console.error("Gemini API Error Details:", error);
   
