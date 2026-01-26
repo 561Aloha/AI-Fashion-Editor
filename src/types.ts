@@ -17,13 +17,16 @@ export interface ClosetItem {
   imageUrl: string; 
   category: ClosetCategory;
   style: ClothingStyle;
+  storagePath?: string;
+  filename?: string;
   isFavorite: boolean;
 }
 
-
 export interface FavoriteCreation {
+  id: string;
   image: string;
-  outfit?: {  
+  createdAt: number;
+  outfit?: {
     type: 'ai-studio' | 'designer';
   };
 }

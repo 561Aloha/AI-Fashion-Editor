@@ -1,86 +1,231 @@
-import React from 'react';
-import { RewindIcon, PlayIcon, FastForwardIcon } from './icons';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { RewindIcon, PauseIcon, PlayIcon, FastForwardIcon } from "./icons";
+import "../clothingCarousel.css";
 
 interface CarouselItem {
-    source?: string; 
+  source?: string;
 }
 
 interface ClothingCarouselProps {
-    items: CarouselItem[];
-    currentIndex: number;
-    onNext: () => void;
-    onPrev: () => void;
-    title: string;
+  items: CarouselItem[];
+  currentIndex: number;
+  onNext: () => void;
+  onPrev: () => void;
+  title: string;
+  autoPlayMs?: number;
 }
 
+type Dir = "next" | "prev";
+
 export const ClothingCarousel: React.FC<ClothingCarouselProps> = ({
-    items,
-    currentIndex,
-    onNext,
-    onPrev,
-    title,
+  items,
+  currentIndex,
+  onNext,
+  onPrev,
+  title,
+  autoPlayMs = 1200,
 }) => {
-    const validIndex = currentIndex >= items.length ? 0 : currentIndex;
-    const currentItem = items.length > 0 ? items[validIndex] : null;
+  const hasItems = items.length > 0;
+  const canMove = items.length > 1;
 
-    const currentImageSrc = () => {
-        if (!currentItem) return '';
-        const src = currentItem.source;
-        if (!src) return '';                 // ✅ guard against undefined/null
+  const safeIndex = hasItems
+    ? (currentIndex % items.length + items.length) % items.length
+    : 0;
 
-        if (src.startsWith('data:image')) return src;
+  // Normalize image src
+  const getSrc = (item?: CarouselItem | null) => {
+    const src = item?.source?.trim();
+    if (!src) return "";
+    if (src.startsWith("data:image")) return src;
+    if (src.length > 500 && !src.startsWith("/") && !src.startsWith("http")) {
+      return `data:image/png;base64,${src}`;
+    }
+    return src;
+  };
 
-        // Likely raw base64 (long string, no slash/http)
-        if (src.length > 500 && !src.startsWith('/') && !src.startsWith('http')) {
-            return `data:image/png;base64,${src}`;
-        }
+  const currentItem = hasItems ? items[safeIndex] : null;
+  const currentSrc = useMemo(() => getSrc(currentItem), [currentItem]);
 
-        if (src.startsWith('/')) return src;
+  // ---- Transition state (ONLY when animating) ----
+  const [transition, setTransition] = useState<{
+    active: boolean;
+    fromSrc: string;
+    toSrc: string;
+    dir: Dir;
+    key: number;
+  }>({
+    active: false,
+    fromSrc: "",
+    toSrc: "",
+    dir: "next",
+    key: 0,
+  });
 
-        // http(s) URL (Firebase Storage, etc.)
-        return src;
-    };
+  // If items/currentIndex changes from outside (mode switch / reset),
+  // kill any transition and just show the current image.
+  const lastSignatureRef = useRef<string>("");
+  useEffect(() => {
+    const sig = `${items.length}|${safeIndex}|${currentSrc}`;
+    if (lastSignatureRef.current && lastSignatureRef.current !== sig) {
+      setTransition((t) => (t.active ? { ...t, active: false } : t));
+    }
+    lastSignatureRef.current = sig;
+  }, [items.length, safeIndex, currentSrc]);
 
-    const imageSrc = currentImageSrc();
+  // ---- Stable refs for autoplay callbacks ----
+  const onNextRef = useRef(onNext);
+  const onPrevRef = useRef(onPrev);
+  useEffect(() => {
+    onNextRef.current = onNext;
+    onPrevRef.current = onPrev;
+  }, [onNext, onPrev]);
 
-    return (
-        <div className="flex flex-col items-center gap-2">
-            <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center relative group">
-                {items.length > 0 && currentItem && imageSrc ? (
-                    <img
-                        src={imageSrc}
-                        alt={`${title} item ${validIndex + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                            console.error(`Failed to load image: ${currentItem.source}`);
-                            (e.target as HTMLImageElement).src = '/placeholder.png';
-                        }}
-                    />
-                ) : (
-                    <span className="text-gray-500 text-center">
-                        No {title} items found for this category.
-                    </span>
-                )}
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const startTransition = useCallback(
+    (dir: Dir) => {
+      if (!canMove || !hasItems) return;
+
+      const from = currentSrc;
+      const nextIndex = (safeIndex + 1) % items.length;
+      const prevIndex = (safeIndex - 1 + items.length) % items.length;
+      const targetItem = dir === "next" ? items[nextIndex] : items[prevIndex];
+      const to = getSrc(targetItem) || from;
+
+      setTransition((t) => ({
+        active: true,
+        fromSrc: from,
+        toSrc: to,
+        dir,
+        key: t.key + 1,
+      }));
+    },
+    [canMove, hasItems, currentSrc, safeIndex, items]
+  );
+
+  // Autoplay (does not depend on onNext function identity anymore)
+  useEffect(() => {
+    if (!isPlaying || !canMove) return;
+
+    const id = window.setInterval(() => {
+      startTransition("next");
+      onNextRef.current();
+    }, autoPlayMs);
+
+    return () => window.clearInterval(id);
+  }, [isPlaying, canMove, autoPlayMs, startTransition]);
+
+  const handlePrev = () => {
+    if (!canMove) return;
+    setIsPlaying(false);
+    startTransition("prev");
+    onPrevRef.current();
+  };
+
+  const handleNext = () => {
+    if (!canMove) return;
+    setIsPlaying(false);
+    startTransition("next");
+    onNextRef.current();
+  };
+
+  const togglePlay = () => {
+    if (!canMove) return;
+    setIsPlaying((p) => !p);
+  };
+
+  // Optional: stop showing transition after animation finishes
+  // Match this timeout to your CSS animation duration.
+  useEffect(() => {
+    if (!transition.active) return;
+    const timeout = window.setTimeout(() => {
+      setTransition((t) => ({ ...t, active: false }));
+    }, 420); // <-- set to your slide animation duration
+    return () => window.clearTimeout(timeout);
+  }, [transition.active, transition.key]);
+
+  return (
+    <div className="cc-carousel">
+      <div className="cc-frame">
+        {hasItems && currentSrc ? (
+          transition.active ? (
+            <div
+              className={`cc-slideStage ${
+                transition.dir === "next" ? "cc-slide--next" : "cc-slide--prev"
+              }`}
+              key={transition.key}
+            >
+              {/* outgoing */}
+              <img
+                src={transition.fromSrc}
+                alt={`${title} item ${safeIndex + 1}`}
+                className="cc-slide cc-slide--out"
+                loading="lazy"
+                onError={(e) => {
+                  console.error(`Failed to load image: ${currentItem?.source}`);
+                  (e.currentTarget as HTMLImageElement).src = "/placeholder.png";
+                }}
+              />
+
+              {/* incoming */}
+              <img
+                src={transition.toSrc}
+                alt={`${title} incoming item`}
+                className="cc-slide cc-slide--in"
+                loading="lazy"
+                onError={(e) => {
+                  console.error(`Failed to load incoming image`);
+                  (e.currentTarget as HTMLImageElement).src = "/placeholder.png";
+                }}
+              />
             </div>
-            <div className="w-full flex justify-center items-center gap-4 bg-pink-300 p-2 rounded-lg border-2 border-black">
-                <button
-                    onClick={onPrev}
-                    className="text-black hover:text-gray-700 transition-colors disabled:opacity-50"
-                    disabled={items.length < 2}
-                >
-                    <RewindIcon className="h-6 w-6" />
-                </button>
-                <button className="text-black hover:text-gray-700 transition-colors">
-                    <PlayIcon className="h-6 w-6" />
-                </button>
-                <button
-                    onClick={onNext}
-                    className="text-black hover:text-gray-700 transition-colors disabled:opacity-50"
-                    disabled={items.length < 2}
-                >
-                    <FastForwardIcon className="h-6 w-6" />
-                </button>
-            </div>
-        </div>
-    );
+          ) : (
+            // ✅ No transition happening: render ONE image only (prevents “jump forward” on mode switch)
+            <img
+              src={currentSrc}
+              alt={`${title} item ${safeIndex + 1}`}
+              className="cc-single"
+              loading="lazy"
+              onError={(e) => {
+                console.error(`Failed to load image: ${currentItem?.source}`);
+                (e.currentTarget as HTMLImageElement).src = "/placeholder.png";
+              }}
+            />
+          )
+        ) : (
+          <span className="cc-empty">No {title} items found.</span>
+        )}
+      </div>
+
+      <div className="cc-controls">
+        <button
+          onClick={handlePrev}
+          className="cc-btn"
+          disabled={!canMove}
+          aria-label={`Previous ${title}`}
+        >
+          <RewindIcon className="h-5 w-5" />
+        </button>
+
+        <button
+          className="cc-btn"
+          type="button"
+          onClick={togglePlay}
+          disabled={!canMove}
+          aria-label={isPlaying ? "Pause carousel" : "Play carousel"}
+        >
+          {isPlaying ? <PauseIcon className="h-5 w-5" /> : <PlayIcon className="h-5 w-5" />}
+        </button>
+
+        <button
+          onClick={handleNext}
+          className="cc-btn"
+          disabled={!canMove}
+          aria-label={`Next ${title}`}
+        >
+          <FastForwardIcon className="h-5 w-5" />
+        </button>
+      </div>
+    </div>
+  );
 };

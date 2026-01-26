@@ -9,9 +9,9 @@
   port = 8888
   framework = "vite"
   functionsPort = 9999
+  functionsTimeout = 120
 
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
-
-
+  

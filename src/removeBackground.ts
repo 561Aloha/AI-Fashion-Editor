@@ -1,11 +1,3 @@
-/**
- * Background Removal Service using Hugging Face's free models
- * 
- * This service uses the Hugging Face Inference API with free models to remove backgrounds from clothing images.
- * Supported models:
- * - REMBG (via Hugging Face): Uses the rembg model for high-quality background removal
- * - Alternative: briaai/BRIA-2.0 for more detail preservation
- */
 
 // Model options - choose the one that works best for your use case
 const HF_MODELS = {
@@ -14,13 +6,6 @@ const HF_MODELS = {
 
 const SELECTED_MODEL = HF_MODELS.RMBG;
 
-/**
- * Remove background from an image using Hugging Face's free model
- * @param imageBase64 - Base64 encoded image string (without data URI prefix)
- * @param hfApiKey - Hugging Face API key (get free one at huggingface.co)
- * @returns Promise<string> - Base64 encoded image with transparent background
- */
-// src/removeBackground.ts
 export async function removeImageBackgroundHF(
   imageBase64: string
 ): Promise<string> {
@@ -44,12 +29,6 @@ export async function removeImageBackgroundHF(
 }
 
 
-
-
-/**
- * Alternative: Use a simple approach with canvas for quick testing
- * This removes the background by creating a transparent PNG
- */
 export async function removeImageBackgroundCanvas(imageBase64: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -104,9 +83,6 @@ export async function removeImageBackgroundCanvas(imageBase64: string): Promise<
   });
 }
 
-/**
- * Utility: Convert base64 string to Blob
- */
 function base64ToBlob(base64: string, mimeType: string = 'image/png'): Blob {
   // Remove data URI prefix if present
   const cleanBase64 = base64.replace(/^data:image\/\w+;base64,/, '');
@@ -122,9 +98,6 @@ function base64ToBlob(base64: string, mimeType: string = 'image/png'): Blob {
   return new Blob([byteArray], { type: mimeType });
 }
 
-/**
- * Utility: Convert Blob to base64 string
- */
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -138,9 +111,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-/**
- * Wrapper function that tries HF first, falls back to canvas if needed
- */
+
 export async function removeImageBackgroundWithFallback(
   imageBase64: string
 ): Promise<string> {

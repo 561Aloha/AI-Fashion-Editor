@@ -1,0 +1,152 @@
+.cc-carousel {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 auto;
+  margin-bottom: 12px;
+}
+
+.cc-title {
+  font-weight: 700;
+  font-size: 15px;
+  text-align: center;
+  color: var(--cc-ink);
+}
+
+.cc-frame {
+  width: 250px;
+  height: 200px;
+  max-width: 100%;
+  border: 2px solid var(--cc-border);
+  border-radius: var(--cc-radius);
+  background: #f9fafb;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+}
+
+.cc-img{
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.cc-empty {
+  font-size: 14px;
+  color: var(--cc-muted);
+  text-align: center;
+  padding: 12px;
+  font-weight: 600;
+}
+.cc-controls {
+  width: 100%; 
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  max-width: 200px;
+  margin: 0 auto;
+  border-radius: 12px;
+
+}
+
+.cc-btn {
+  border-radius: 8px;
+  border: 2px solid var(--cc-border);
+  background: #fff;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 60px;
+  cursor: pointer;
+  box-shadow: var(--cc-shadow-sm);
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.cc-btn:hover:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.cc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.cc-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.cc-carousel{
+    margin-top: 0;
+    
+}
+
+/* Stage that holds two images during transition */
+.cc-slideStage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Both images are absolutely stacked */
+.cc-slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #fff;
+}
+
+/* NEXT direction: incoming starts right, slides in; outgoing slides left */
+.cc-slide--next .cc-slide--in {
+  transform: translateX(100%);
+  animation: cc-in-next 420ms ease forwards;
+}
+
+.cc-slide--next .cc-slide--out {
+  transform: translateX(0%);
+  animation: cc-out-next 420ms ease forwards;
+}
+
+/* PREV direction: incoming starts left, slides in; outgoing slides right */
+.cc-slide--prev .cc-slide--in {
+  transform: translateX(-100%);
+  animation: cc-in-prev 420ms ease forwards;
+}
+
+.cc-slide--prev .cc-slide--out {
+  transform: translateX(0%);
+  animation: cc-out-prev 420ms ease forwards;
+}
+
+@keyframes cc-in-next {
+  to { transform: translateX(0%); }
+}
+@keyframes cc-out-next {
+  to { transform: translateX(-100%); }
+}
+
+@keyframes cc-in-prev {
+  to { transform: translateX(0%); }
+}
+@keyframes cc-out-prev {
+  to { transform: translateX(100%); }
+}
+
+.cc-single {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* or cover if you want crop */
+  display: block;
+}

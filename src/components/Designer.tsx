@@ -1,33 +1,26 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import type { ClosetItem, ImageFile, Base64Image } from '../types';
-import { clothingData } from '../data/clothing';
-import { ClothingCarousel } from './ClothingCarousel';
-import type { View, ViewMode } from './MainMenu';
-import { ImageUploader } from './ImageUploader';
-import { generateVirtualTryOnHybrid } from './huggingfaceVirtualTryOn';
-import { fileToBase64Image, urlToBase64Image } from '../utils';
+
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import type { ClosetItem, ImageFile, Base64Image, FavoriteCreation } from "../types";
+import { clothingData } from "../data/clothing";
+import { ClothingCarousel } from "./ClothingCarousel";
+import type { View, ViewMode } from "./MainMenu";
+import { ImageUploader } from "./ImageUploader";
+import { generateVirtualTryOnHybrid } from "./huggingfaceVirtualTryOn";
+import { fileToBase64Image, urlToBase64Image } from "../utils";
+import { generateTryOn as generateTryOnGemini } from "../../services/geminiService";
+
+import "../css/designer.css";
 
 const ActionButton: React.FC<{
   onClick: () => void;
   children: React.ReactNode;
-  color?: string;
+  className?: string;
   disabled?: boolean;
-}> = ({ onClick, children, color = 'bg-pink-300', disabled = false }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`py-2 px-8 rounded-lg font-semibold text-gray-800 border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all ${color} disabled:bg-gray-400 disabled:shadow-none disabled:translate-y-0 disabled:translate-x-0 disabled:cursor-not-allowed`}
-  >
+}> = ({ onClick, children, className = "designerBtn", disabled = false }) => (
+  <button type="button" onClick={onClick} disabled={disabled} className={className}>
     {children}
   </button>
 );
-
-const getImageSrc = (source: string) => {
-  if (!source) return '';
-  if (source.startsWith('data:image')) return source;
-  if (source.length  > 500) return `data:image/png;base64,${source}`;
-  return source;
-};
 
 export const Designer: React.FC<{
   mode: ViewMode;
@@ -37,119 +30,93 @@ export const Designer: React.FC<{
   setModelImage: React.Dispatch<React.SetStateAction<ImageFile[]>>;
   onNavigate: (view: View, mode?: ViewMode) => void;
   selectedItemIds?: string[];
+  userId?: string;
+  favoriteCreations: FavoriteCreation[];
+  setFavoriteCreations: React.Dispatch<React.SetStateAction<FavoriteCreation[]>>;
 }> = ({
   mode,
   closet,
-  setCloset,
+  setCloset, // (kept for API compatibility even if not used here)
   modelImage,
   setModelImage,
   onNavigate,
   selectedItemIds = [],
+  userId, // (kept for API compatibility even if not used here)
+  favoriteCreations, // (kept for API compatibility even if not used here)
+  setFavoriteCreations,
 }) => {
+
   const [upperGarmentIndex, setUpperGarmentIndex] = useState(0);
   const [topIndex, setTopIndex] = useState(0);
   const [bottomIndex, setBottomIndex] = useState(0);
   const [dressIndex, setDressIndex] = useState(0);
   const [shoesIndex, setShoesIndex] = useState(0);
 
-  const [tryOnOutfitType, setTryOnOutfitType] = useState<'dress' | 'top-bottom' | null>(
-    null
-  );
+  const [tryOnOutfitType, setTryOnOutfitType] = useState<"dress" | "top-bottom" | null>(null);
   const [isTryOnMode, setIsTryOnMode] = useState(false);
-  const [prompt, setPrompt] = useState<string>('');
+
+  const [prompt, setPrompt] = useState("");
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { tops, bottoms, dresses, shoes, upperGarments } = useMemo(() => {
-  const defaultWork = clothingData?.work ?? { tops: [], bottoms: [], dresses: [] };
-  const defaultWeekend = clothingData?.weekend ?? { tops: [], bottoms: [], dresses: [] };
+  const b64CacheRef = useRef<Map<string, Base64Image>>(new Map());
+  const inFlightRef = useRef(false);
+  const tryOnCountRef = useRef(0);
 
-    // Closet now uses imageUrl instead of imageB64
+  const { tops, bottoms, dresses, shoes, upperGarments } = useMemo(() => {
+    const defaultWork = clothingData?.work ?? { tops: [], bottoms: [], dresses: [] };
+    const defaultWeekend = clothingData?.weekend ?? { tops: [], bottoms: [], dresses: [] };
+
     const mapClosetItem = (i: ClosetItem) => ({
-      source: i.imageUrl,
+      source: i.imageUrl, // imageUrl
       style: i.style,
     });
 
-    const closetTops = closet
-      .filter((i) => i.category === 'top')
-      .map(mapClosetItem);
-    const closetBottoms = closet
-      .filter((i) => i.category === 'bottoms')
-      .map(mapClosetItem);
-    const closetDresses = closet
-      .filter((i) => i.category === 'dress')
-      .map(mapClosetItem);
-    const closetShoes = closet
-      .filter((i) => i.category === 'shoes')
-      .map(mapClosetItem);
+    const closetTops = closet.filter((i) => i.category === "top").map(mapClosetItem);
+    const closetBottoms = closet.filter((i) => i.category === "bottoms").map(mapClosetItem);
+    const closetDresses = closet.filter((i) => i.category === "dress").map(mapClosetItem);
+    const closetShoes = closet.filter((i) => i.category === "shoes").map(mapClosetItem);
 
     const allTops = [
       ...closetTops,
-      ...defaultWork.tops.map((url) => ({ source: url, style: 'work' as const })),
-      ...defaultWeekend.tops.map((url) => ({
-        source: url,
-        style: 'weekend' as const,
-      })),
+      ...defaultWork.tops.map((url) => ({ source: url, style: "work" as const })),
+      ...defaultWeekend.tops.map((url) => ({ source: url, style: "weekend" as const })),
     ];
+
     const allBottoms = [
       ...closetBottoms,
-      ...((defaultWork.bottoms ?? [])).map((url) => ({ source: url, style: 'work' as const })),
-      ...((defaultWeekend.bottoms ?? [])).map((url) => ({ source: url, style: 'weekend' as const })),
+      ...((defaultWork.bottoms ?? [])).map((url) => ({ source: url, style: "work" as const })),
+      ...((defaultWeekend.bottoms ?? [])).map((url) => ({ source: url, style: "weekend" as const })),
     ];
 
     const allDresses = [
       ...closetDresses,
-      ...defaultWeekend.dresses.map((url) => ({
-        source: url,
-        style: 'weekend' as const,
-      })),
+      ...defaultWeekend.dresses.map((url) => ({ source: url, style: "weekend" as const })),
     ];
 
     const allShoes = [...closetShoes];
 
-    let filteredTops, filteredBottoms, filteredDresses, filteredShoes;
+    let filteredTops: typeof allTops = [];
+    let filteredBottoms: typeof allBottoms = [];
+    let filteredDresses: typeof allDresses = [];
+    let filteredShoes: typeof allShoes = [];
 
-    switch (mode) {
-      case 'work':
-        filteredTops = allTops.filter(
-          (i) => i.style === 'work' || i.style === 'both'
-        );
-        filteredBottoms = allBottoms.filter(
-          (i) => i.style === 'work' || i.style === 'both'
-        );
-        filteredDresses = allDresses.filter(
-          (i) => i.style === 'work' || i.style === 'both'
-        );
-        filteredShoes = allShoes.filter(
-          (i) => i.style === 'work' || i.style === 'both'
-        );
-        break;
-      case 'weekend':
-        filteredTops = allTops.filter(
-          (i) => i.style === 'weekend' || i.style === 'both'
-        );
-        filteredBottoms = allBottoms.filter(
-          (i) => i.style === 'weekend' || i.style === 'both'
-        );
-        filteredDresses = allDresses.filter(
-          (i) => i.style === 'weekend' || i.style === 'both'
-        );
-        filteredShoes = allShoes.filter(
-          (i) => i.style === 'weekend' || i.style === 'both'
-        );
-        break;
-      default:
-        filteredTops = [];
-        filteredBottoms = [];
-        filteredDresses = [];
-        filteredShoes = [];
-        break;
+    if (mode === "work") {
+      filteredTops = allTops.filter((i) => i.style === "work" || i.style === "both");
+      filteredBottoms = allBottoms.filter((i) => i.style === "work" || i.style === "both");
+      filteredDresses = allDresses.filter((i) => i.style === "work" || i.style === "both");
+      filteredShoes = allShoes.filter((i) => i.style === "work" || i.style === "both");
+    } else if (mode === "weekend") {
+      filteredTops = allTops.filter((i) => i.style === "weekend" || i.style === "both");
+      filteredBottoms = allBottoms.filter((i) => i.style === "weekend" || i.style === "both");
+      filteredDresses = allDresses.filter((i) => i.style === "weekend" || i.style === "both");
+      filteredShoes = allShoes.filter((i) => i.style === "weekend" || i.style === "both");
     }
 
     const combinedUpperGarments = [
-      ...filteredTops.map((i) => ({ ...i, type: 'top' as const })),
-      ...filteredDresses.map((i) => ({ ...i, type: 'dress' as const })),
+      ...filteredTops.map((i) => ({ ...i, type: "top" as const })),
+      ...filteredDresses.map((i) => ({ ...i, type: "dress" as const })),
     ];
 
     return {
@@ -161,21 +128,11 @@ export const Designer: React.FC<{
     };
   }, [mode, closet]);
 
-  useEffect(() => {
-    setUpperGarmentIndex(0);
-  }, [upperGarments]);
-  useEffect(() => {
-    setTopIndex(0);
-  }, [tops]);
-  useEffect(() => {
-    setBottomIndex(0);
-  }, [bottoms]);
-  useEffect(() => {
-    setDressIndex(0);
-  }, [dresses]);
-  useEffect(() => {
-    setShoesIndex(0);
-  }, [shoes]);
+  useEffect(() => setUpperGarmentIndex(0), [upperGarments]);
+  useEffect(() => setTopIndex(0), [tops]);
+  useEffect(() => setBottomIndex(0), [bottoms]);
+  useEffect(() => setDressIndex(0), [dresses]);
+  useEffect(() => setShoesIndex(0), [shoes]);
 
   const currentUpperGarment =
     upperGarments.length > 0
@@ -183,72 +140,102 @@ export const Designer: React.FC<{
         ? upperGarments[upperGarmentIndex]
         : upperGarments[0]
       : null;
-  const isBrowsingDress = currentUpperGarment?.type === 'dress';
+
+  const isBrowsingDress = currentUpperGarment?.type === "dress";
 
   const handleEnterTryOn = () => {
     if (!currentUpperGarment) return;
 
     if (isBrowsingDress) {
-      const currentDressInDressesArray = dresses.findIndex(
-        (d) => d.source === currentUpperGarment.source
-      );
-      setDressIndex(
-        currentDressInDressesArray >= 0 ? currentDressInDressesArray : 0
-      );
-      setTryOnOutfitType('dress');
+      const idx = dresses.findIndex((d) => d.source === currentUpperGarment.source);
+      setDressIndex(idx >= 0 ? idx : 0);
+      setTryOnOutfitType("dress");
     } else {
-      const currentTopInTopsArray = tops.findIndex(
-        (t) => t.source === currentUpperGarment.source
-      );
-      setTopIndex(currentTopInTopsArray >= 0 ? currentTopInTopsArray : 0);
-      setTryOnOutfitType('top-bottom');
+      const idx = tops.findIndex((t) => t.source === currentUpperGarment.source);
+      setTopIndex(idx >= 0 ? idx : 0);
+      setTryOnOutfitType("top-bottom");
     }
+
+    setGeneratedImage(null);
+    setError(null);
     setIsTryOnMode(true);
   };
 
-  const convertSourceToBase64 = useCallback(async (source: string): Promise<Base64Image> => {
-    if (!source) return { base64: '', mimeType: 'image/png' };
+  const handleBackToBrowse = () => {
+    setIsTryOnMode(false);
+    setTryOnOutfitType(null);
+    setGeneratedImage(null);
+    setError(null);
+  };
 
-    const cached = b64CacheRef.current.get(source);
-    if (cached) return cached;
+  const createIndexChanger =
+    (setter: React.Dispatch<React.SetStateAction<number>>, max: number) =>
+    (direction: "next" | "prev") => {
+      if (max === 0) return;
+      setter((prev) => {
+        const newIndex = direction === "next" ? prev + 1 : prev - 1;
+        if (newIndex >= max) return 0;
+        if (newIndex < 0) return max - 1;
+        return newIndex;
+      });
+    };
 
-    let result: Base64Image;
+  const handleNextUpperGarment = createIndexChanger(setUpperGarmentIndex, upperGarments.length);
+  const handlePrevUpperGarment = createIndexChanger(setUpperGarmentIndex, upperGarments.length);
+  const handleNextTop = createIndexChanger(setTopIndex, tops.length);
+  const handlePrevTop = createIndexChanger(setTopIndex, tops.length);
+  const handleNextBottom = createIndexChanger(setBottomIndex, bottoms.length);
+  const handlePrevBottom = createIndexChanger(setBottomIndex, bottoms.length);
+  const handleNextDress = createIndexChanger(setDressIndex, dresses.length);
+  const handlePrevDress = createIndexChanger(setDressIndex, dresses.length);
+  const handleNextShoes = createIndexChanger(setShoesIndex, shoes.length);
+  const handlePrevShoes = createIndexChanger(setShoesIndex, shoes.length);
 
-    if (source.startsWith('data:image')) {
-      const [header, data] = source.split(',');
-      const mimeType = header.match(/data:(.*?);base64/)?.[1] ?? 'image/png';
-      result = { base64: data ?? '', mimeType };
-    } else if (source.length > 500 && !source.startsWith('/') && !source.startsWith('http')) {
-      result = { base64: source, mimeType: 'image/png' };
-    } else if (source.startsWith('/')) {
-      const response = await fetch(source);
-      const blob = await response.blob();
-      result = await fileToBase64Image(blob);
-    } else if (source.startsWith('http')) {
-      result = await urlToBase64Image(source);
-    } else {
-      result = { base64: source, mimeType: 'image/png' };
-    }
+  const convertSourceToBase64 = useCallback(
+    async (source: string): Promise<Base64Image> => {
+      if (!source) return { base64: "", mimeType: "image/png" };
 
-    b64CacheRef.current.set(source, result);
-    return result;
-  }, []);
+      const cached = b64CacheRef.current.get(source);
+      if (cached) return cached;
 
-  const b64CacheRef = React.useRef<Map<string, Base64Image>>(new Map());
-  const inFlightRef = React.useRef(false);
+      let result: Base64Image;
+
+      if (source.startsWith("data:image")) {
+        const [header, data] = source.split(",");
+        const mimeType = header.match(/data:(.*?);base64/)?.[1] ?? "image/png";
+        result = { base64: data ?? "", mimeType };
+      } else if (source.length > 500 && !source.startsWith("/") && !source.startsWith("http")) {
+        // raw base64
+        result = { base64: source, mimeType: "image/png" };
+      } else if (source.startsWith("/")) {
+        const response = await fetch(source);
+        const blob = await response.blob();
+        result = await fileToBase64Image(blob);
+      } else if (source.startsWith("http")) {
+        result = await urlToBase64Image(source);
+      } else {
+        result = { base64: source, mimeType: "image/png" };
+      }
+
+      b64CacheRef.current.set(source, result);
+      return result;
+    },
+    []
+  );
 
   const handleGenerate = useCallback(async () => {
-    console.log('🎨 DESIGNER: handleGenerate triggered.');
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    // ---------- Guards ----------
     if (modelImage.length === 0) {
-      setError('Please upload a model image.');
+      setError("Please upload a model image.");
+      inFlightRef.current = false;
       return;
     }
+
     if (!tryOnOutfitType) {
-      setError('Please select an outfit type (dress or top-bottom).');
+      setError("Please select an outfit type (dress or top-bottom).");
+      inFlightRef.current = false;
       return;
     }
 
@@ -257,83 +244,91 @@ export const Designer: React.FC<{
     setGeneratedImage(null);
 
     try {
-      // ---------- Model image -> base64 ----------
       const fileInput = modelImage[0]?.file;
-      if (!fileInput) throw new Error('No file in modelImage');
+      if (!fileInput) throw new Error("No file in modelImage");
 
       const modelB64 = await fileToBase64Image(fileInput);
       const clothingToSend: Base64Image[] = [];
-
       const itemsToUse =
         selectedItemIds && selectedItemIds.length > 0
           ? closet.filter((item) => selectedItemIds.includes(item.id))
           : [];
 
-      if (tryOnOutfitType === 'dress') {
-        const selectedDress = itemsToUse.find((item) => item.category === 'dress');
+      if (tryOnOutfitType === "dress") {
+        const selectedDress = itemsToUse.find((item) => item.category === "dress");
         const dressSource = selectedDress?.imageUrl ?? dresses[dressIndex]?.source;
 
-        if (!dressSource) throw new Error('No dress selected.');
+        if (!dressSource) throw new Error("No dress selected.");
         const dressB64 = await convertSourceToBase64(dressSource);
         clothingToSend.push(dressB64);
       }
 
-      if (tryOnOutfitType === 'top-bottom') {
-        const selectedTop = itemsToUse.find((item) => item.category === 'top');
+      if (tryOnOutfitType === "top-bottom") {
+        const selectedTop = itemsToUse.find((item) => item.category === "top");
         const topSource = selectedTop?.imageUrl ?? tops[topIndex]?.source;
 
-        if (!topSource) throw new Error('No top selected.');
+        if (!topSource) throw new Error("No top selected.");
         const topB64 = await convertSourceToBase64(topSource);
-        clothingToSend.push(topB64); // top must be first
+        clothingToSend.push(topB64); // top first
 
-        const selectedBottom = itemsToUse.find((item) => item.category === 'bottoms');
+        const selectedBottom = itemsToUse.find((item) => item.category === "bottoms");
         const bottomSource = selectedBottom?.imageUrl ?? bottoms[bottomIndex]?.source;
 
-        if (!bottomSource) throw new Error('No bottoms selected.');
+        if (!bottomSource) throw new Error("No bottoms selected.");
         const bottomB64 = await convertSourceToBase64(bottomSource);
-        clothingToSend.push(bottomB64); // bottom must be second
+        clothingToSend.push(bottomB64); // bottom second
       }
 
-      if (clothingToSend.length === 0) {
-        throw new Error('No clothing items to generate.');
-      }
+      if (clothingToSend.length === 0) throw new Error("No clothing items to generate.");
 
-
-      // ---------- Prompt ----------
       const effectivePrompt = prompt.trim()
         ? `Person wearing outfit. ${prompt}`
         : `Person wearing outfit. Professional fashion photography.`;
 
-      console.log('🎨 DESIGNER: Outfit type:', tryOnOutfitType);
-      console.log(
-        '🎨 DESIGNER: Clothing order:',
-        tryOnOutfitType === 'top-bottom' ? ['top', 'bottom'] : ['dress']
-      );
+      const useGemini = tryOnCountRef.current < 2;
+      let rawResult: string | null = null;
 
-      // ---------- Call VTON ----------
-      const rawResult = await generateVirtualTryOnHybrid(
-        modelB64.base64,
-        clothingToSend,
-        effectivePrompt
-      );
+      if (useGemini) {
+        tryOnCountRef.current += 1;
 
-      if (!rawResult) throw new Error('Virtual try-on returned no image data.');
-      console.log("model bytes", modelB64.base64.length);
-      console.log("clothing count", clothingToSend.length);
-      console.log("clothing bytes", clothingToSend.map(x => x.base64.length));
-      console.log("clothing mime", clothingToSend.map(x => x.mimeType));
+        const modelDataUrl = `data:${modelB64.mimeType};base64,${modelB64.base64}`;
+        const topDataUrl = clothingToSend[0]
+          ? `data:${clothingToSend[0].mimeType};base64,${clothingToSend[0].base64}`
+          : undefined;
+        const bottomDataUrl = clothingToSend[1]
+          ? `data:${clothingToSend[1].mimeType};base64,${clothingToSend[1].base64}`
+          : undefined;
 
-      // ---------- Normalize output to data URL ----------
-      const cleaned = String(rawResult).replace(/\s/g, '');
-      const imageSrc = cleaned.startsWith('data:image')
-        ? cleaned
-        : `data:image/png;base64,${cleaned}`;
+        try {
+          rawResult = await generateTryOnGemini(modelDataUrl, topDataUrl, bottomDataUrl);
+        } catch (gemErr) {
+          console.error("❌ Gemini try-on failed, will fallback to HF:", gemErr);
+        }
+      }
+
+      if (!rawResult) {
+        rawResult = await generateVirtualTryOnHybrid(modelB64.base64, clothingToSend, effectivePrompt);
+      }
+
+      if (!rawResult) throw new Error("Virtual try-on returned no image data.");
+
+      const cleaned = String(rawResult).replace(/\s/g, "");
+      const imageSrc = cleaned.startsWith("data:image") ? cleaned : `data:image/png;base64,${cleaned}`;
 
       setGeneratedImage(imageSrc);
-      console.log('🎨 DESIGNER: Image generation successful!');
+
+      setFavoriteCreations((prev) => [
+        {
+          id: crypto.randomUUID(),
+          image: imageSrc,
+          createdAt: Date.now(),
+          outfit: { type: "designer" },
+        },
+        ...prev,
+      ]);
     } catch (e: any) {
-      console.error('❌ DESIGNER ERROR:', e?.message);
-      setError(e?.message || 'An unexpected error occurred during image generation.');
+      console.error("❌ DESIGNER ERROR:", e?.message);
+      setError(e?.message || "An unexpected error occurred during image generation.");
     } finally {
       inFlightRef.current = false;
       setIsLoading(false);
@@ -351,131 +346,94 @@ export const Designer: React.FC<{
     bottomIndex,
     prompt,
     convertSourceToBase64,
+    setFavoriteCreations,
   ]);
-
-  const createIndexChanger =
-    (setter: React.Dispatch<React.SetStateAction<number>>, max: number) =>
-    (direction: 'next' | 'prev') => {
-      if (max === 0) return;
-      setter((prev) => {
-        const newIndex = direction === 'next' ? prev + 1 : prev - 1;
-        if (newIndex >= max) return 0;
-        if (newIndex < 0) return max - 1;
-        return newIndex;
-      });
-    };
-
-  const handleNextUpperGarment = createIndexChanger(
-    setUpperGarmentIndex,
-    upperGarments.length
-  );
-  const handlePrevUpperGarment = createIndexChanger(
-    setUpperGarmentIndex,
-    upperGarments.length
-  );
-  const handleNextTop = createIndexChanger(setTopIndex, tops.length);
-  const handlePrevTop = createIndexChanger(setTopIndex, tops.length);
-  const handleNextBottom = createIndexChanger(setBottomIndex, bottoms.length);
-  const handlePrevBottom = createIndexChanger(setBottomIndex, bottoms.length);
-  const handleNextDress = createIndexChanger(setDressIndex, dresses.length);
-  const handlePrevDress = createIndexChanger(setDressIndex, dresses.length);
-  const handleNextShoes = createIndexChanger(setShoesIndex, shoes.length);
-  const handlePrevShoes = createIndexChanger(setShoesIndex, shoes.length);
 
   const renderModelPanel = () => {
     if (isLoading) {
       return (
-        <div className="w-full aspect-[3/4] border-2 border-black rounded-lg bg-gray-200 flex flex-col items-center justify-center textcenter p-4">
-          <svg
-            className="animate-spin h-10 w-10 text-purple-500"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
+        <div className="designerModel designerModel--loading">
+          <svg className="designerSpinner" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="designerSpinner__track" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="designerSpinner__head" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          <p className="mt-3 text-lg font-semibold text-gray-700">
-            Generating your look...
-          </p>
-          <p className="text-sm text-gray-600 mt-2">
-            This may take 30–60 seconds
-          </p>
+          <p className="designerLoadingTitle">Generating your look...</p>
+          <p className="designerLoadingSub">This may take 30–60 seconds</p>
         </div>
       );
     }
+
     if (generatedImage) {
-      console.log(
-        '🎨 DESIGNER: Generated image src prefix:',
-        generatedImage.slice(0, 80)
-      );
       return (
-        <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 relative group">
-          <img
-            src={generatedImage}
-            alt="Generated Outfit"
-            className="w-full h-full object-cover"
-          />
+        <div className="designerModel designerModel--result">
+          <img src={generatedImage} alt="Generated Outfit" className="designerModelImg" />
         </div>
       );
     }
+
     return (
-      <ImageUploader
-        images={modelImage}
-        onImagesUpload={(files) =>
-          setModelImage(files.length > 0 ? [files[0]] : [])
-        }
-        label="Upload a Photo of Your Model"
-        multiple={false}
-        helpText="Use a clear, full-body shot"
-      />
+      <div className="designerModel designerModel--uploader">
+        <ImageUploader
+          images={modelImage}
+          onImagesUpload={(files) => setModelImage(files.length > 0 ? [files[0]] : [])}
+          label="Upload a Photo of Your Model"
+          multiple={false}
+          helpText="Use a clear, full-body shot"
+        />
+      </div>
     );
   };
 
-  if (isTryOnMode) {
-    return (
-      <div className="w-full text-gray-800 relative">
+if (isTryOnMode) {
+  const canDressMe = !isLoading && modelImage.length > 0 && !!tryOnOutfitType;
+  return (
+    <div className="designer designer--tryon">
+      <div className="designerTopbar">
         <button
-          onClick={() => {
-            setIsTryOnMode(false);
-            setTryOnOutfitType(null);
-            setGeneratedImage(null);
-            setError(null);
-          }}
-          className="absolute top-[-24px] left-0 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-3 rounded-lg transition-all border-2 border-black text-sm z-10 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px]"
+          type="button"
+          onClick={handleBackToBrowse}
+          className="designerTopbar__btn designerTopbar__btn--left"
+          disabled={isLoading}
         >
-          &larr; Back to Browse
+          &larr; Back
         </button>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Left Column: Clothing */}
-          <div className="space-y-4 flex flex-col">
-            <div className="flex-grow space-y-4">
-              {tryOnOutfitType === 'dress' ? (
+
+        <button
+          type="button"
+          onClick={handleGenerate}
+          className="designerTopbar__btn designerTopbar__btn--primary designerTopbar__btn--right"
+          disabled={!canDressMe}
+          title={
+            modelImage.length === 0
+              ? "Upload a model photo first"
+              : !tryOnOutfitType
+              ? "Pick dress or top + bottoms"
+              : undefined
+          }
+        >
+          Dress Me
+        </button>
+      </div>
+
+      <div className="designerTryOn__wrap">
+        <div className="designerTryOn__grid">
+          <div className="designerTryOn__left">
+            <div className="designerTryOn__leftGrow">
+              {tryOnOutfitType === "dress" ? (
                 <>
                   <ClothingCarousel
                     title="Dress"
                     items={dresses}
                     currentIndex={dressIndex}
-                    onNext={() => handleNextDress('next')}
-                    onPrev={() => handlePrevDress('prev')}
+                    onNext={() => handleNextDress("next")}
+                    onPrev={() => handlePrevDress("prev")}
                   />
                   <ClothingCarousel
                     title="Shoes"
                     items={shoes}
                     currentIndex={shoesIndex}
-                    onNext={() => handleNextShoes('next')}
-                    onPrev={() => handlePrevShoes('prev')}
+                    onNext={() => handleNextShoes("next")}
+                    onPrev={() => handlePrevShoes("prev")}
                   />
                 </>
               ) : (
@@ -484,98 +442,100 @@ export const Designer: React.FC<{
                     title="Top"
                     items={tops}
                     currentIndex={topIndex}
-                    onNext={() => handleNextTop('next')}
-                    onPrev={() => handlePrevTop('prev')}
+                    onNext={() => handleNextTop("next")}
+                    onPrev={() => handlePrevTop("prev")}
                   />
                   <ClothingCarousel
                     title="Bottom"
                     items={bottoms}
                     currentIndex={bottomIndex}
-                    onNext={() => handleNextBottom('next')}
-                    onPrev={() => handlePrevBottom('prev')}
+                    onNext={() => handleNextBottom("next")}
+                    onPrev={() => handlePrevBottom("prev")}
                   />
                 </>
               )}
             </div>
+          </div>
+
+          <div className="designerTryOn__right">
+            {renderModelPanel()}
+
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Optional: Add specific instructions..."
-              className="w-full p-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-              rows={2}
+              rows={3}
+              className="designerTryOn__prompt"
             />
-            <ActionButton
-              onClick={handleGenerate}
-              color="bg-green-400"
-              disabled={isLoading || modelImage.length === 0 || !tryOnOutfitType}
-            >
-              Dress Me
-            </ActionButton>
-          </div>
 
-          {/* Right Column: Model */}
-          <div className="space-y-4">
-            {renderModelPanel()}
-            {error && (
-              <p className="text-red-500 text-sm text-center pt-2">
-                {error}
-              </p>
-            )}
+            {error && <p className="designerTryOn__error">{error}</p>}
           </div>
         </div>
       </div>
-    );
-  }
-
-  return (
-    <div className="w-full text-gray-800 flex flex-col items-center justify-center relative">
-      <div className="w-full max-w-xs space-y-4">
+    </div>
+  );
+}
+return (
+  <div className="designer designer--browse">
+    <div className="designerTopbar">
+      <button
+        type="button"
+        onClick={() => onNavigate("closetManager")}
+        className="designerTopbar__btn designerTopbar__btn--left"
+      >
+        &larr; Back
+      </button>
+          <div className="designer__center">
+      <div className="designer__inner">
         {upperGarments.length > 0 ? (
           <>
             <ClothingCarousel
-              title={isBrowsingDress ? 'Dress' : 'Top'}
+              title={isBrowsingDress ? "Dress" : "Top"}
               items={upperGarments}
               currentIndex={upperGarmentIndex}
-              onNext={() => handleNextUpperGarment('next')}
-              onPrev={() => handlePrevUpperGarment('prev')}
+              onNext={() => handleNextUpperGarment("next")}
+              onPrev={() => handlePrevUpperGarment("prev")}
             />
+
             {isBrowsingDress ? (
               <ClothingCarousel
                 title="Shoes"
                 items={shoes}
                 currentIndex={shoesIndex}
-                onNext={() => handleNextShoes('next')}
-                onPrev={() => handlePrevShoes('prev')}
+                onNext={() => handleNextShoes("next")}
+                onPrev={() => handlePrevShoes("prev")}
               />
             ) : (
               <ClothingCarousel
                 title="Bottom"
                 items={bottoms}
                 currentIndex={bottomIndex}
-                onNext={() => handleNextBottom('next')}
-                onPrev={() => handlePrevBottom('prev')}
+                onNext={() => handleNextBottom("next")}
+                onPrev={() => handlePrevBottom("prev")}
               />
             )}
-            <div className="flex w-full items-center justify-between pt-2">
-              <ActionButton onClick={() => onNavigate('closetManager')}>
-                Browse
-              </ActionButton>
-              <ActionButton onClick={handleEnterTryOn}>
-                Dress Me
-              </ActionButton>
-            </div>
           </>
         ) : (
-          <div className="text-center text-gray-500 py-10 h-[400px] flex flex-col justify-center">
-            <p className="font-semibold">
-              No items found for this category.
-            </p>
-            <p className="text-sm mt-2">
-              Go to the Closet Manager to add items!
-            </p>
+          <div className="designer__empty">
+            <p className="designer__emptyTitle">No items found for this category.</p>
+            <p className="designer__emptySub">Go to the Closet Manager to add items!</p>
           </div>
         )}
       </div>
+    </div> 
+      <button
+        type="button"
+        onClick={handleEnterTryOn}
+        className="designerTopbar__btn designerTopbar__btn--primary designerTopbar__btn--right"
+        disabled={upperGarments.length === 0}
+        title={upperGarments.length === 0 ? "No items available" : undefined}
+      >
+        Dress Me
+      </button>
     </div>
-  );
+  </div>
+);
+
 };
+
+export default Designer;

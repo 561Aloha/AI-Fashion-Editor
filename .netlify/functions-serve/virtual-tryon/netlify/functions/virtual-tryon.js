@@ -2528,18 +2528,19 @@ function buildGarmentDes(userPrompt) {
   const isSkirt = /\bskirt\b/.test(p);
   const isShorts = /\bshorts?\b/.test(p);
   const isPants = /\bpants\b|\btrousers\b/.test(p);
+  const priorityOverride = "The garment's designed length takes priority over the model's silhouette. Generate missing fabric/pixels if needed.";
   let constraints = "Preserve garment identity, silhouette, length, seams, and texture. Photorealistic.";
   if (isJeans) {
-    constraints = "This is FULL-LENGTH denim jeans extending to the ankles. CRITICAL: Keep as full-length jeans (not shorts, not skirt). Preserve exact denim wash/fade contrast, detailed seams, whiskering, pockets, and hem. Photorealistic. DO NOT CROP LENGTH. The garment extends down the full visible leg. Show complete leg coverage.";
+    constraints = `Full-length denim jeans extending to ankles. ${priorityOverride} Preserve denim wash, detailed seams, whiskering, pockets, and hem. Photorealistic.`;
   } else if (isSkirt) {
-    constraints = "This is a skirt. Keep as skirt (not pants/jeans/shorts). Preserve skirt length, pleats/shape, fabric texture, seams, and hem. Photorealistic.";
+    constraints = `Skirt with designed length preserved. ${priorityOverride} Keep pleats/shape, fabric texture, seams, and hem. Photorealistic.`;
   } else if (isShorts) {
-    constraints = "This is shorts. Keep as shorts (not pants/jeans/skirt). Preserve inseam length, fit, seams, and hem. Photorealistic.";
+    constraints = `Shorts with designed inseam length. ${priorityOverride} Preserve fit, seams, and hem. Photorealistic.`;
   } else if (isPants) {
-    constraints = "This is pants. Keep as pants (not shorts, not skirt). Preserve length, fit, seams, and fabric texture. Photorealistic.";
+    constraints = `Pants with full length. ${priorityOverride} Preserve length, fit, seams, and fabric texture. Photorealistic.`;
   }
   const ignoreExtras = "Use only the clothing item; ignore any mannequin/body/hands/background in the garment image.";
-  const negative = "Do not change garment category. Do not invent extra straps/cuts. NO CROPPED LENGTH.";
+  const negative = "Do not change garment category. Do not invent extra straps/cuts.";
   const prefix = userPrompt?.trim() ? `${userPrompt.trim()}. ` : "";
   const finalPrompt = `${negative} ${constraints} ${prefix}${ignoreExtras}`.slice(0, 1e3);
   return finalPrompt;

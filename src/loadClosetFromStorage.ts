@@ -13,7 +13,6 @@ function inferCategory(filename: string): ClosetItem["category"] {
 export async function loadClosetFromStorage(userId: string): Promise<ClosetItem[]> {
   const storage = getStorage();
 
-  // this must match the folder you upload into
   const folderRef = ref(storage, `users/${userId}/closet`);
 
   const res = await listAll(folderRef);
@@ -24,7 +23,7 @@ export async function loadClosetFromStorage(userId: string): Promise<ClosetItem[
       const name = itemRef.name;
 
       return {
-        id: itemRef.fullPath,          // stable id
+        id: itemRef.fullPath,  
         category: inferCategory(name), // top/bottoms/dress/shoes
         imageUrl: url,                 // https download URL that <img> can render
         isFavorite: false,

@@ -29,11 +29,17 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesUpload, im
   };
   
   const hasImages = images.length > 0;
-
   return (
-    <div className="w-full">
-      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-      <div className={`relative flex justify-center items-center w-full px-6 py-8 border-2 border-gray-300 border-dashed rounded-lg ${hasImages ? '' : 'hover:border-indigo-500 transition-colors'}`}>
+    <div className="w-full h-full flex flex-col">
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        {label}
+      </label>
+      <div
+        className={`relative flex-1 flex justify-center items-center w-full px-6 border-2 border-gray-300 border-dashed rounded-lg overflow-hidden ${
+          hasImages ? "" : "hover:border-indigo-500 transition-colors"
+        }`}
+      >
+
         {!hasImages && (
           <div className="text-center">
             <UploadIcon className="mx-auto h-12 w-12 text-gray-400" />
@@ -41,6 +47,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesUpload, im
               <span className="font-semibold text-indigo-600">Click to upload</span> or drag and drop
             </p>
             <p className="text-xs text-gray-500">{helpText}</p>
+
             <input
               type="file"
               multiple={multiple}
@@ -50,30 +57,29 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImagesUpload, im
             />
           </div>
         )}
-        
+
         {hasImages && (
-            <div className={`grid gap-4 ${multiple ? 'grid-cols-2 md:grid-cols-3' : 'grid-cols-1'}`}>
-                {images.map((image, index) => (
-                    <div key={index} className="relative group">
-                        <img src={image.preview} alt="Preview" className="h-40 w-full object-cover rounded-md" />
-                        <button
-                            onClick={() => removeImage(index)}
-                            className="absolute top-1 right-1 p-1.5 bg-black bg-opacity-60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            <TrashIcon className="h-4 w-4"/>
-                        </button>
-                    </div>
-                ))}
-                 {multiple && (
-                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:border-indigo-500 transition-colors">
-                        <UploadIcon className="h-8 w-8 text-gray-400" />
-                        <span className="mt-2 text-sm text-gray-600">Add more</span>
-                        <input type="file" multiple accept="image/*" onChange={handleFileChange} className="hidden" />
-                    </label>
-                )}
-            </div>
+          <div className={`w-full h-full grid gap-4 ${multiple ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1"}`}>
+            {images.map((image, index) => (
+              <div key={index} className="relative group w-full h-full">
+                <img
+                  src={image.preview}
+                  alt="Preview"
+                  className="w-full h-full object-contain rounded-lg"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeImage(index)}
+                  className="absolute top-1 right-1 p-1.5 bg-black bg-opacity-60 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>
   );
+
 };

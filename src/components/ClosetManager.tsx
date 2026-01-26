@@ -1,28 +1,19 @@
-// components/ClosetManager.tsx (AIStudio + ClosetManager)
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import type { ImageFile, ClosetItem, Base64Image } from '../types';
 import { generateFashionImage } from './geminiService';
 import { fileToBase64Image } from '../utils';
 import { ImageUploader } from './ImageUploader';
 import { AddToCloset } from './AddToCloset';
-import { ClothingCarousel } from './ClothingCarousel';
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
-import { db } from "../firebase";
-
-async function loadClosetFromFirestore(userId: string) {
-  const q = query(collection(db, "users", userId, "closet"), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() })) as any; // cast to ClosetItem[]
-}
 
 interface AIStudioProps {
   closet: ClosetItem[];
-  setCloset: React.Dispatch<React.SetStateAction<ClosetItem[]>>; // unused, also fine
+  setCloset: React.Dispatch<React.SetStateAction<ClosetItem[]>>;
   modelImage: ImageFile[];
+  onSaveCreation?: (image: string) => void;
   setModelImage: React.Dispatch<React.SetStateAction<ImageFile[]>>;
 }
 
-export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage }) => {
+export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage,  onSaveCreation, }) => {
   const [outfitImage, setOutfitImage] = useState<ImageFile[]>([]);
   const [prompt, setPrompt] = useState<string>('');
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -88,7 +79,7 @@ export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage })
     } finally {
       setIsLoading(false);
     }
-  }, [modelImage, outfitImage, prompt]);
+  }, [modelImage, outfitImage, prompt, onSaveCreation]);
 
   const renderMainContent = () => {
     if (isLoading) {
@@ -121,8 +112,9 @@ export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage })
         </div>
       );
     }
-    if (generatedImage) {
-      return (
+  if (generatedImage) {
+    return (
+      <div className="space-y-3">
         <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center relative group">
           <img
             src={generatedImage}
@@ -130,8 +122,17 @@ export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage })
             className="w-full h-full object-cover"
           />
         </div>
-      );
-    }
+
+        <button
+          onClick={() => onSaveCreation?.(generatedImage)}
+          className="w-full py-3 px-4 bg-purple-600 text-white font-bold rounded-lg border-2 border-black shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all"
+        >
+          Dress Me
+        </button>
+      </div>
+    );
+  }
+
     return (
       <ImageUploader
         images={modelImage}
@@ -149,7 +150,6 @@ export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage })
         {/* Left Column: model uploader / loader / result */}
         <div className="space-y-4">{renderMainContent()}</div>
 
-        {/* Right Column: outfit + prompt */}
         <div className="space-y-6 flex flex-col">
           <ImageUploader
             images={outfitImage}
@@ -181,14 +181,10 @@ export const AIStudio: React.FC<AIStudioProps> = ({ modelImage, setModelImage })
   );
 };
 
-// =================================================================
-// ClosetManager Component
-// =================================================================
-
 interface ClosetManagerProps {
   closet: ClosetItem[];
   setCloset: React.Dispatch<React.SetStateAction<ClosetItem[]>>;
-  userId: string; // not used, but ok to leave
+  userId: string;
 }
 
 export const ClosetManager: React.FC<ClosetManagerProps> = ({
@@ -197,37 +193,7 @@ export const ClosetManager: React.FC<ClosetManagerProps> = ({
   userId,
 }) => {
   console.log('[DEBUG: ClosetManager] Closet state:', closet);
-  const [topIndex, setTopIndex] = useState(0);
-  const [bottomIndex, setBottomIndex] = useState(0);
-  const [dressIndex, setDressIndex] = useState(0);
-  const [shoesIndex, setShoesIndex] = useState(0);
-
-  const { tops, bottoms, dresses, shoes } = useMemo(() => {
-    return {
-      tops: closet.filter((i) => i.category === 'top'),
-      bottoms: closet.filter((i) => i.category === 'bottom'),
-      dresses: closet.filter((i) => i.category === 'dress'),
-      shoes: closet.filter((i) => i.category === 'shoes'),
-    };
-  }, [closet]);
-
-  useEffect(() => {
-    setTopIndex(0);
-  }, [tops]);
-  useEffect(() => {
-    setBottomIndex(0);
-  }, [bottoms]);
-  useEffect(() => {
-    setDressIndex(0);
-  }, [dresses]);
-  useEffect(() => {
-    setShoesIndex(0);
-  }, [shoes]);
-  useEffect(() => {
-  if (!userId) return;
-  loadClosetFromFirestore(userId).then(setCloset).catch(console.error);
-  }, [userId, setCloset]);
-
+  const [lastAddedItemId, setLastAddedItemId] = useState<string | null>(null);
 
   const handleSaveToCloset = (
     newItem: Omit<ClosetItem, 'id' | 'isFavorite'>,
@@ -239,86 +205,45 @@ export const ClosetManager: React.FC<ClosetManagerProps> = ({
     };
     console.log('[DEBUG: ClosetManager] Saving new item to closet:', itemWithId);
     setCloset((prev) => [...prev, itemWithId]);
+    setLastAddedItemId(itemWithId.id);
   };
 
-  const createIndexChanger =
-    (setter: React.Dispatch<React.SetStateAction<number>>, max: number) =>
-    (direction: 'next' | 'prev') => {
-      if (max === 0) return;
-      setter((prev) => {
-        const newIndex = direction === 'next' ? prev + 1 : prev - 1;
-        if (newIndex >= max) return 0;
-        if (newIndex < 0) return max - 1;
-        return newIndex;
-      });
-    };
-
-  const handleNextTop = createIndexChanger(setTopIndex, tops.length);
-  const handlePrevTop = createIndexChanger(setTopIndex, tops.length);
-  const handleNextBottom = createIndexChanger(setBottomIndex, bottoms.length);
-  const handlePrevBottom = createIndexChanger(setBottomIndex, bottoms.length);
-  const handleNextDress = createIndexChanger(setDressIndex, dresses.length);
-  const handlePrevDress = createIndexChanger(setDressIndex, dresses.length);
-  const handleNextShoes = createIndexChanger(setShoesIndex, shoes.length);
-  const handlePrevShoes = createIndexChanger(setShoesIndex, shoes.length);
+  // Get the last added item
+  const lastAddedItem = lastAddedItemId
+    ? closet.find((i) => i.id === lastAddedItemId)
+    : null;
 
   return (
-    <div className="w-full text-gray-800 relative">
-      <div className="space-y-6">
-      <AddToCloset onSave={handleSaveToCloset} userId={userId} />
+    <div className="w-full text-gray-800 flex flex-col items-center justify-center">
+      <div className="w-full max-w-md space-y-6">
+        <AddToCloset onSave={handleSaveToCloset} userId={userId} />
 
-
-        <div className="mt-8 pt-6 border-t-2 border-gray-300">
-          <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
-            Browse Your Closet
-          </h3>
-          <div className="w-full max-w-xs mx-auto space-y-4">
-            {tops.length > 0 && (
-              <ClothingCarousel
-                title="Tops"
-                items={tops
-                  .filter((i) => !!i.imageUrl)
-                  .map((i) => ({ source: i.imageUrl }))}
-                currentIndex={topIndex}
-                onNext={() => handleNextTop('next')}
-                onPrev={() => handlePrevTop('prev')}
-              />
-            )}
-            {bottoms.length > 0 && (
-              <ClothingCarousel
-                title="Bottoms"
-                items={bottoms
-                  .filter((i) => !!i.imageUrl)
-                  .map((i) => ({ source: i.imageUrl }))}
-                currentIndex={bottomIndex}
-                onNext={() => handleNextBottom('next')}
-                onPrev={() => handlePrevBottom('prev')}
-              />
-            )}
-            {dresses.length > 0 && (
-              <ClothingCarousel
-                title="Dresses"
-                items={dresses
-                  .filter((i) => !!i.imageUrl)
-                  .map((i) => ({ source: i.imageUrl }))}
-                currentIndex={dressIndex}
-                onNext={() => handleNextDress('next')}
-                onPrev={() => handlePrevDress('prev')}
-              />
-            )}
-            {shoes.length > 0 && (
-              <ClothingCarousel
-                title="Shoes"
-                items={shoes
-                  .filter((i) => !!i.imageUrl)
-                  .map((i) => ({ source: i.imageUrl }))}
-                currentIndex={shoesIndex}
-                onNext={() => handleNextShoes('next')}
-                onPrev={() => handlePrevShoes('prev')}
-              />
-            )}
+        {/* ✅ Show newly added items below */}
+        {lastAddedItem && (
+          <div className="mt-8 pt-6 border-t-2 border-gray-300">
+            <h3 className="text-lg font-bold text-gray-800 mb-4 text-center">
+              Recently Added
+            </h3>
+            <div className="w-full aspect-[3/4] border-2 border-black rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center">
+              {lastAddedItem.imageUrl ? (
+                <img
+                  src={lastAddedItem.imageUrl}
+                  alt={`Recently added ${lastAddedItem.category}`}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/placeholder.png';
+                  }}
+                />
+              ) : (
+                <span className="text-gray-500">No image</span>
+              )}
+            </div>
+            <div className="mt-2 text-center text-sm text-gray-600">
+              <p className="capitalize font-semibold">{lastAddedItem.category}</p>
+              <p className="capitalize text-xs">{lastAddedItem.style}</p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

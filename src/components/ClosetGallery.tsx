@@ -1,7 +1,11 @@
-// src/components/ClosetGallery.tsx
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import type { ClosetItem } from '../types';
 import type { View, ViewMode } from './MainMenu';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { deleteObject, ref } from 'firebase/storage';
+import { db, storage, auth } from '../firebase';
+import "../css/closetGallery.css";
+
 
 interface ClosetGalleryProps {
   closet: ClosetItem[];
@@ -9,6 +13,7 @@ interface ClosetGalleryProps {
   onToggleSelect: (id: string) => void;
   onBack: () => void;
   onNavigate: (view: View, mode?: ViewMode) => void;
+  setCloset: React.Dispatch<React.SetStateAction<ClosetItem[]>>;
 }
 
 export const ClosetGallery: React.FC<ClosetGalleryProps> = ({
@@ -17,92 +22,193 @@ export const ClosetGallery: React.FC<ClosetGalleryProps> = ({
   onToggleSelect,
   onBack,
   onNavigate,
+  setCloset,
 }) => {
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
   const hasItems = closet.length > 0;
 
+  // ✅ Get the currently selected item in each category
+  const selectedByCategory = useMemo(() => {
+    const selected: Record<string, string | null> = {
+      top: null,
+      bottoms: null,
+      dress: null,
+      shoes: null,
+    };
+
+    selectedItemIds.forEach((id) => {
+      const item = closet.find((i) => i.id === id);
+      if (item && item.category in selected) {
+        selected[item.category] = id;
+      }
+    });
+
+    return selected;
+  }, [selectedItemIds, closet]);
+  const handleCategorySelect = (itemId: string) => {
+    const item = closet.find((i) => i.id === itemId);
+    if (!item) return;
+    const currentSelectionForCategory = selectedByCategory[item.category];
+
+    if (currentSelectionForCategory === itemId) {
+      // If clicking the same item, deselect it
+      onToggleSelect(itemId);
+    } else {
+      // If clicking a different item in the same category, deselect old and select new
+      if (currentSelectionForCategory) {
+        onToggleSelect(currentSelectionForCategory); // Deselect old
+      }
+      onToggleSelect(itemId); // Select new
+    }
+  };
+
+  const canDressMe = useMemo(() => {
+  const hasDress = !!selectedByCategory.dress;
+  const hasTopAndBottom = !!selectedByCategory.top && !!selectedByCategory.bottoms;
+  return hasDress || hasTopAndBottom;
+}, [selectedByCategory]);
+
+  const handleDelete = async (item: ClosetItem) => {
+    if (!auth.currentUser) {
+      setError('Not authenticated');
+      return;
+    }
+
+    setDeletingId(item.id);
+    setError(null);
+
+    try {
+      await deleteDoc(doc(db, 'users', auth.currentUser.uid, 'closet', item.id));
+      if (item.storagePath) {
+        const storageRef = ref(storage, item.storagePath);
+        await deleteObject(storageRef);
+      }
+      setCloset((prev) => prev.filter((i) => i.id !== item.id));
+      console.log('[ClosetGallery] Item deleted successfully:', item.id);
+    } catch (err: any) {
+      console.error('[ClosetGallery] Delete error:', err);
+      setError(err?.message || 'Failed to delete item');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
-    <div className="w-full text-gray-800">
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={onBack}
-          className="py-1 px-3 rounded-lg font-semibold text-gray-800 border-2 border-black bg-gray-200 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
-        >
+    <div className="closet-gallery-root">
+      <div className="cg-topbar">
+        <button type="button" onClick={onBack} className="cg-btn ">
           &larr; Back
         </button>
-        <h2 className="text-xl font-bold">My Wardrobe</h2>
+        <h2 className="cg-title">My Wardrobe</h2>
         <button
-          onClick={() => onNavigate('designer', 'weekend')}
-          className="py-1 px-3 rounded-lg font-semibold text-gray-800 border-2 border-black bg-pink-300 shadow-[2px_2px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[2px] hover:translate-y-[2px] transition-all text-sm"
+          type="button"
+          onClick={() => onNavigate("designer", "weekend")}
+          className="cg-btn cg-btn--primary"
+          disabled={!canDressMe}
+          title={!canDressMe ? "Select a dress, or a top + bottoms" : undefined}
         >
           Dress Me
         </button>
       </div>
 
+
+      {error && <div className="cg-error">{error}</div>}
+
       {!hasItems && (
-        <div className="w-full flex flex-col items-center justify-center py-12 text-center text-gray-500">
-          <p className="font-semibold mb-2">Your wardrobe is empty.</p>
-          <p className="text-sm mb-4">
-            Go to <span className="font-semibold">Manage Closet</span> to add items.
+        <div className="cg-empty">
+          <p className="cg-empty__headline">Your wardrobe is empty.</p>
+          <p className="cg-empty__sub">
+            Go to <span className="cg-empty__bold">Manage Closet</span> to add items.
           </p>
           <button
-            onClick={() => onNavigate('closetManager')}
-            className="py-2 px-4 rounded-lg font-semibold text-gray-800 border-2 border-black bg-blue-300 shadow-[3px_3px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[3px] hover:translate-y-[3px] transition-all text-sm"
+            type="button"
+            onClick={() => onNavigate("closetManager")}
+            className="cg-btn cg-btn--secondary"
           >
             Manage Closet
           </button>
         </div>
       )}
 
+      {/* Grid */}
       {hasItems && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        <div className="closet-grid">
           {closet.map((item) => {
-            const isSelected = selectedItemIds.includes(item.id);
-            const src = item.imageUrl || ''; // ← THIS is the key field
+            const isSelected = selectedByCategory[item.category] === item.id;
+            const src = item.imageUrl || "";
+            const isDeleting = deletingId === item.id;
+            const isHovered = hoveredId === item.id;
 
             return (
-              <button
+              <div
                 key={item.id}
-                type="button"
-                onClick={() => onToggleSelect(item.id)}
-                className={`relative border-2 rounded-lg overflow-hidden shadow-[3px_3px_0px_rgba(0,0,0,1)] transition-all ${
-                  isSelected
-                    ? 'border-pink-500 ring-2 ring-pink-400'
-                    : 'border-black hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none'
-                }`}
+                className="cg-card"
+                onMouseEnter={() => setHoveredId(item.id)}
+                onMouseLeave={() => setHoveredId(null)}
               >
-                <div className="aspect-[3/4] bg-gray-200">
-                  {src ? (
-                    <img
-                      src={src}
-                      alt={`${item.category} item`}
-                      className="w-full h-full object-contain bg-white"
-                      onError={(e) => {
-                        console.error('[ClosetGallery] Failed to load imageUrl:', src);
-                        (e.target as HTMLImageElement).src = '/placeholder.png';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs text-gray-500 p-2">
-                      No image
+                <button
+                  type="button"
+                  onClick={() => handleCategorySelect(item.id)}
+                  disabled={isDeleting}
+                  className={[
+                    "cg-card__button",
+                    isSelected ? "is-selected" : "",
+                    isDeleting ? "is-deleting" : "",
+                  ].join(" ")}
+                >
+                  <div className="cg-card__media">
+                    {src ? (
+                      <img
+                        src={src}
+                        alt={`${item.category} item`}
+                        className="cg-card__img"
+                        loading="lazy"
+                        onError={(e) => {
+                          console.error("[ClosetGallery] Failed to load imageUrl:", src);
+                          (e.target as HTMLImageElement).src = "/placeholder.png";
+                        }}
+                      />
+                    ) : (
+                      <div className="cg-card__noimg">No image</div>
+                    )}
+
+                    {/* tags */}
+                    <div className="cg-card__tags">
+                      <span className="cg-card__tag">{item.category}</span>
+                      <span className="cg-card__tag">{item.style}</span>
                     </div>
-                  )}
-                </div>
 
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-xs px-2 py-1 flex justify-between items-center">
-                  <span className="capitalize">{item.category}</span>
-                  <span className="capitalize">{item.style}</span>
-                </div>
+                    {/* selected badge */}
+                    {isSelected && <div className="cg-card__selected">Selected</div>}
 
-                {isSelected && (
-                  <div className="absolute top-1 right-1 bg-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-full">
-                    Selected
+                    {/* delete (hover only) */}
+                    {isHovered && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`Delete this ${item.category}?`)) {
+                            handleDelete(item);
+                          }
+                        }}
+                        disabled={isDeleting}
+                        className="cg-card__delete"
+                        title="Delete item"
+                      >
+                        {isDeleting ? "..." : "✕"}
+                      </button>
+                    )}
                   </div>
-                )}
-              </button>
+                </button>
+              </div>
             );
           })}
         </div>
       )}
     </div>
   );
+
 };
