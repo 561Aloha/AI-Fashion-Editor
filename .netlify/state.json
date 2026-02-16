@@ -1,7 +1,7 @@
 {
 	"geolocation": {
 		"data": {
-			"city": "Jupiter",
+			"city": "Fort Lauderdale",
 			"country": {
 				"code": "US",
 				"name": "United States"
@@ -11,11 +11,11 @@
 				"name": "Florida"
 			},
 			"timezone": "America/New_York",
-			"latitude": 26.9207,
-			"longitude": -80.2093,
-			"postalCode": "33478"
+			"latitude": 26.1185,
+			"longitude": -80.145,
+			"postalCode": "33349"
 		},
-		"timestamp": 1769289704478
+		"timestamp": 1770823114847
 	},
 	"siteId": "e8fc4deb-21e0-4d07-bfee-c192bb082b1c"
 }
