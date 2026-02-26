@@ -1,139 +1,109 @@
-- 👗 AI Fashion Editor
+# 👗 AI Fashion Editor
 
-An AI-powered virtual styling application that allows users to experiment with outfits, explore clothing combinations, and visualize fashion edits in an interactive interface.
+**An AI-powered virtual styling app — upload looks, mix and match pieces, and get intelligent outfit suggestions in an interactive interface.**
 
-Built with React + TypeScript and powered by AI integrations for intelligent styling interactions.
+🔗 **Live Demo:** [Coming Soon]
 
-✨ Overview
+---
 
-AI Fashion Editor is a web application that lets users:
+## Overview
 
-Upload or preview fashion items
+AI Fashion Editor is a product-driven web application that combines front-end engineering, UX design, and AI integration into a single styling experience. Users can upload or preview fashion items, experiment with combinations, and receive AI-assisted outfit suggestions — all within a clean, responsive interface.
 
-Mix and match clothing pieces
+---
 
-Experiment with styling combinations
+## Features
 
-Explore AI-enhanced outfit suggestions
+- **AI-Assisted Styling** — Intelligent outfit suggestions powered by Gemini / HuggingFace integrations
+- **Clothing Carousel** — Dynamic item selection with smooth, interactive browsing
+- **Styling Preview** — Real-time outfit visualization as you mix and match pieces
+- **Authentication** — Secure user sessions via Firebase Auth
+- **Cloud Persistence** — Outfit data stored and retrieved from Firestore
+- **Responsive Design** — Fully optimized for mobile and desktop with Tailwind CSS
 
-Interact with a dynamic, modern UI
+---
 
-The goal of this project was to combine front-end engineering, UX design, and AI integration into a single product-driven experience.
+## Tech Stack
 
-🚀 Features
+| Layer | Technology |
+|---|---|
+| Frontend | TypeScript, React, Vite |
+| Styling | Tailwind CSS |
+| Auth & Database | Firebase (Auth + Firestore) |
+| AI | Gemini API / HuggingFace |
+| Deployment | Vercel / Netlify |
 
-🧠 AI-assisted outfit suggestions
+---
 
-🎨 Dynamic clothing carousel selection
+## Architecture
 
-🖼 Interactive styling preview
+```
+User Input → React State Management → AI Processing → Styled Output → Firebase Storage
+```
 
-🔄 Real-time state updates with React
+The application is built on a component-driven architecture with reusable UI modules, controlled state flows, asynchronous API handling, and cloud-based persistence.
 
-🔐 Authentication & user session handling
+---
 
-☁️ Cloud-based data storage
+## Project Structure
 
-📱 Fully responsive layout
+```
+src/
+├── components/
+│   ├── CarouselSelector.tsx    # Clothing item browser
+│   ├── OutfitPreview.tsx       # Live styling canvas
+│   ├── SuggestionPanel.tsx     # AI outfit recommendations
+│   └── AuthGuard.tsx           # Session & auth wrapper
+├── hooks/
+│   └── useOutfitState.ts       # Centralized outfit state logic
+├── services/
+│   ├── aiService.ts            # Gemini / HuggingFace API calls
+│   └── firebaseService.ts      # Firestore read/write helpers
+├── App.tsx
+└── main.tsx
+```
 
-🛠 Tech Stack
+---
 
-Frontend
+## Getting Started
 
-React
-
-TypeScript
-
-Tailwind CSS
-
-Vite
-
-Backend / Services
-
-Firebase (Auth & Firestore)
-
-AI APIs (Gemini / HuggingFace integration)
-
-Deployment
-
-Hosted on Vercel / Netlify
-
-🧩 Architecture Overview
-User Input → React State Management → AI Processing → 
-Styled Output → Firebase Storage
-
-
-The application leverages:
-
-Component-driven architecture
-
-Reusable UI modules
-
-Controlled state flows
-
-Asynchronous API handling
-
-Cloud-based persistence
-
-🎯 Product Goals
-
-This project was designed to explore:
-
-AI-assisted creative tools
-
-Virtual fashion editing workflows
-
-Frontend performance optimization
-
-Clean UX flows for styling tools
-
-Real-world API integration in production apps
-
-🖼 Screenshots
-
-Add screenshots here
-
-/screenshots/editor-view.png
-/screenshots/outfit-preview.png
-
-🧪 Running Locally
+```bash
 # Clone the repo
-git clone https://github.com/yourusername/ai-fashion-editor.git
-
-# Navigate to project
+git clone https://github.com/561Aloha/ai-fashion-editor.git
 cd ai-fashion-editor
 
 # Install dependencies
 npm install
 
-# Start development server
+# Add your environment variables
+cp .env.example .env
+# Fill in the values below
+
+# Start the dev server
 npm run dev
+```
 
-🔐 Environment Variables
+### Environment Variables
 
-Create a .env file and add:
-
+```env
 VITE_FIREBASE_API_KEY=
 VITE_FIREBASE_AUTH_DOMAIN=
+VITE_FIREBASE_PROJECT_ID=
 VITE_AI_API_KEY=
+```
 
-📈 Future Improvements
+---
 
-Advanced pose-aware clothing overlays
+## Roadmap
 
-AI-generated style descriptions
+- [ ] Pose-aware clothing overlays
+- [ ] AI-generated style descriptions
+- [ ] Save & share outfit boards
+- [ ] Personalized recommendation engine
+- [ ] Outfit history tracking
 
-Save & share outfit boards
+---
 
-Personalized recommendation engine
+## Author
 
-Outfit history tracking
-
-👩‍💻 Author
-
-Dianna Dimambro
-Software Engineer | UX Designer
-Florida | Open to Remote
-
-GitHub: https://github.com/561Aloha
-Portfolio: MadebyDianna.com
+Built by [@MadeByDianna](https://madebydianna.com) · [GitHub](https://github.com/561Aloha)
