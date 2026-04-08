@@ -7,7 +7,7 @@ import type { View, ViewMode } from "./MainMenu";
 import { ImageUploader } from "./ImageUploader";
 import { generateVirtualTryOnHybrid } from "./huggingfaceVirtualTryOn";
 import { fileToBase64Image, urlToBase64Image } from "../utils";
-import { generateTryOn as generateTryOnGemini } from "../../services/geminiService";
+import { generateTryOn as generateTryOnGemini } from "../../netlify/functions/geminiService";
 
 import "../css/designer.css";
 

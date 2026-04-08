@@ -1,7 +1,7 @@
 {
 	"geolocation": {
 		"data": {
-			"city": "Fort Lauderdale",
+			"city": "Wellington",
 			"country": {
 				"code": "US",
 				"name": "United States"
@@ -11,11 +11,11 @@
 				"name": "Florida"
 			},
 			"timezone": "America/New_York",
-			"latitude": 26.1185,
-			"longitude": -80.145,
-			"postalCode": "33349"
+			"latitude": 26.6598,
+			"longitude": -80.2429,
+			"postalCode": "33414"
 		},
-		"timestamp": 1770823114847
+		"timestamp": 1775663838193
 	},
 	"siteId": "e8fc4deb-21e0-4d07-bfee-c192bb082b1c"
 }
