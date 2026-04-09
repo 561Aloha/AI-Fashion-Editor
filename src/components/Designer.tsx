@@ -297,28 +297,16 @@ export const Designer: React.FC<{
           ? `data:${clothingToSend[1].mimeType};base64,${clothingToSend[1].base64}`
           : undefined;
 
-        try {
-          const res = await fetch("/.netlify/functions/geminiService", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              modelImage: modelDataUrl,
-              top: topDataUrl,
-              bottom: bottomDataUrl,
-            }),
-          });
-
-          if (!res.ok) {
-            throw new Error("Gemini function failed");
-          }
-
-          const data = await res.json();
-          rawResult = data.image;
-        } catch (gemErr) {
-          console.error("❌ Gemini try-on failed, will fallback to HF:", gemErr);
-        }
+      try {
+        const data = await callGeminiService({
+          modelImage: modelDataUrl,
+          top: topDataUrl,
+          bottom: bottomDataUrl,
+        });
+        rawResult = data.image;
+      } catch (gemErr) {
+        console.error("❌ Gemini try-on failed, will fallback to HF:", gemErr);
+      }
               }
 
       if (!rawResult) {
