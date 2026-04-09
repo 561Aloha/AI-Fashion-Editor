@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { ClosetItem, ImageFile, Base64Image, FavoriteCreation } from "../types";
 import { clothingData } from "../data/clothing";
@@ -7,9 +6,8 @@ import type { View, ViewMode } from "./MainMenu";
 import { ImageUploader } from "./ImageUploader";
 import { generateVirtualTryOnHybrid } from "./huggingfaceVirtualTryOn";
 import { fileToBase64Image, urlToBase64Image } from "../utils";
-import { generateTryOn as generateTryOnGemini } from "../../.netlify/functions/geminiService";
 
-import "../css/designer.css";
+import "../css/Designer.css";
 
 const ActionButton: React.FC<{
   onClick: () => void;
@@ -300,7 +298,24 @@ export const Designer: React.FC<{
           : undefined;
 
         try {
-          rawResult = await generateTryOnGemini(modelDataUrl, topDataUrl, bottomDataUrl);
+          const res = await fetch("/.netlify/functions/geminiService", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              modelImage: modelDataUrl,
+              top: topDataUrl,
+              bottom: bottomDataUrl,
+            }),
+          });
+
+          if (!res.ok) {
+            throw new Error("Gemini function failed");
+          }
+
+          const data = await res.json();
+          rawResult = data.image;
         } catch (gemErr) {
           console.error("❌ Gemini try-on failed, will fallback to HF:", gemErr);
         }
@@ -485,44 +500,44 @@ return (
       >
         &larr; Back
       </button>
-          <div className="designer__center">
-      <div className="designer__inner">
-        {upperGarments.length > 0 ? (
-          <>
-            <ClothingCarousel
-              title={isBrowsingDress ? "Dress" : "Top"}
-              items={upperGarments}
-              currentIndex={upperGarmentIndex}
-              onNext={() => handleNextUpperGarment("next")}
-              onPrev={() => handlePrevUpperGarment("prev")}
-            />
+      <div className="designer__center">
+        <div className="designer__inner">
+          {upperGarments.length > 0 ? (
+            <>
+              <ClothingCarousel
+                title={isBrowsingDress ? "Dress" : "Top"}
+                items={upperGarments}
+                currentIndex={upperGarmentIndex}
+                onNext={() => handleNextUpperGarment("next")}
+                onPrev={() => handlePrevUpperGarment("prev")}
+              />
 
-            {isBrowsingDress ? (
-              <ClothingCarousel
-                title="Shoes"
-                items={shoes}
-                currentIndex={shoesIndex}
-                onNext={() => handleNextShoes("next")}
-                onPrev={() => handlePrevShoes("prev")}
-              />
-            ) : (
-              <ClothingCarousel
-                title="Bottom"
-                items={bottoms}
-                currentIndex={bottomIndex}
-                onNext={() => handleNextBottom("next")}
-                onPrev={() => handlePrevBottom("prev")}
-              />
-            )}
-          </>
-        ) : (
-          <div className="designer__empty">
-            <p className="designer__emptyTitle">No items found for this category.</p>
-            <p className="designer__emptySub">Go to the Closet Manager to add items!</p>
-          </div>
-        )}
+              {isBrowsingDress ? (
+                <ClothingCarousel
+                  title="Shoes"
+                  items={shoes}
+                  currentIndex={shoesIndex}
+                  onNext={() => handleNextShoes("next")}
+                  onPrev={() => handlePrevShoes("prev")}
+                />
+              ) : (
+                <ClothingCarousel
+                  title="Bottom"
+                  items={bottoms}
+                  currentIndex={bottomIndex}
+                  onNext={() => handleNextBottom("next")}
+                  onPrev={() => handlePrevBottom("prev")}
+                />
+              )}
+            </>
+          ) : (
+            <div className="designer__empty">
+              <p className="designer__emptyTitle">No items found for this category.</p>
+              <p className="designer__emptySub">Go to the Closet Manager to add items!</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div> 
       <button
         type="button"
         onClick={handleEnterTryOn}
