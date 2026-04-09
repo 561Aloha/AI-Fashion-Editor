@@ -5,7 +5,7 @@ import { ClothingCarousel } from "./ClothingCarousel";
 import type { View, ViewMode } from "./MainMenu";
 import { ImageUploader } from "./ImageUploader";
 import { generateVirtualTryOnHybrid } from "./huggingfaceVirtualTryOn";
-import { fileToBase64Image, urlToBase64Image } from "../utils";
+import { fileToBase64Image, urlToBase64Image, callGeminiService} from "../utils";
 
 import "../css/Designer.css";
 
@@ -319,7 +319,7 @@ export const Designer: React.FC<{
         } catch (gemErr) {
           console.error("❌ Gemini try-on failed, will fallback to HF:", gemErr);
         }
-      }
+              }
 
       if (!rawResult) {
         rawResult = await generateVirtualTryOnHybrid(modelB64.base64, clothingToSend, effectivePrompt);

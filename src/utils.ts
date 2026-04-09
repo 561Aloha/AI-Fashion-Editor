@@ -263,3 +263,15 @@ export async function urlToBase64Image(
     throw new Error("Could not load image. It might be blocked by CORS or the link is broken.");
   }
 }
+
+// src/utils/geminiService.ts
+export async function callGeminiService(input: string) {
+  const response = await fetch('/.netlify/functions/geminiService', {
+    method: 'POST',
+    body: JSON.stringify({ input }),
+    headers: { 'Content-Type': 'application/json' }
+  });
+  
+  if (!response.ok) throw new Error('API call failed');
+  return response.json();
+}
