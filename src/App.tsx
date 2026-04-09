@@ -14,8 +14,7 @@ import type { ClosetItem, ImageFile, Base64Image, FavoriteCreation } from './typ
 import { fileToBase64Image } from './utils';
 import './App.css';
 import { collection, getDocs, orderBy, query } from "firebase/firestore";
-
-import "./Clothing.css";
+import "./clothing.css";
 
 
 interface StorableImage extends Base64Image {
