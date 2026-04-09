@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback} from 'react';
 import type { ImageFile, ClosetItem, Base64Image } from '../types';
 import { generateFashionImage } from './geminiService';
 import { fileToBase64Image } from '../utils';

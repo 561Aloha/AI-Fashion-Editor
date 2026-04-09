@@ -3,7 +3,6 @@ import { ImageUploader } from './ImageUploader';
 import { removeImageBackgroundWithFallback } from '../removeBackground';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
-import { auth } from '../firebase';
 import { db } from '../firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 
